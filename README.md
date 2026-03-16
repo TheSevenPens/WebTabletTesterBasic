@@ -1,7 +1,7 @@
 # HtmlTabletTester
 
 # Overview
-The Tablet Tester is a simple online tool to better understand how digital pens work. It is useful for troublehooting pen problems and ans as a basis for developers to explore pen behavior. It is NOT intended as a creative digital painting app, even though it has some similarities.
+The Tablet Tester is a simple online tool to better understand how digital pens work. It is useful for troublehooting pen problems and as a basis for developers to explore pen behavior. It is NOT intended as a creative digital painting app.
 
 # Docs
 https://docs.thesevenpens.com/drawtab/developers/online-tablet-tester

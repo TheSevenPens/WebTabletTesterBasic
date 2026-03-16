@@ -15,8 +15,19 @@
 //   e.buttons       - bitmask: 1=tip, 2=barrel button, 32=eraser
 // ============================================================
 
-const canvas = document.getElementById('canvas');
+const canvas  = document.getElementById('canvas');
+const toolbar = document.getElementById('toolbar');
 const ctx = canvas.getContext('2d');
+
+const infoEls = {
+    type:     document.getElementById('val-type'),
+    pressure: document.getElementById('val-pressure'),
+    tiltX:    document.getElementById('val-tiltX'),
+    tiltY:    document.getElementById('val-tiltY'),
+    azimuth:  document.getElementById('val-azimuth'),
+    altitude: document.getElementById('val-altitude'),
+    twist:    document.getElementById('val-twist'),
+};
 
 const CANVAS_BG = '#e6e6fa';
 const MAX_BRUSH_SIZE = 50; // brush diameter in pixels at full pressure
@@ -25,7 +36,6 @@ const MAX_BRUSH_SIZE = 50; // brush diameter in pixels at full pressure
 // ── Canvas setup ─────────────────────────────────────────────
 
 function resizeCanvas() {
-    const toolbar = document.getElementById('toolbar');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight - toolbar.offsetHeight;
     clearCanvas();
@@ -59,13 +69,13 @@ function drawSegment(from, to, size) {
 
 function updateInfo(e) {
     const toDeg = radians => (radians * 180 / Math.PI).toFixed(1);
-    document.getElementById('val-type').textContent     = e.pointerType || '---';
-    document.getElementById('val-pressure').textContent = e.pressure.toFixed(3);
-    document.getElementById('val-tiltX').textContent    = e.tiltX.toFixed(1) + '°';
-    document.getElementById('val-tiltY').textContent    = e.tiltY.toFixed(1) + '°';
-    document.getElementById('val-azimuth').textContent  = toDeg(e.azimuthAngle) + '°';
-    document.getElementById('val-altitude').textContent = toDeg(e.altitudeAngle) + '°';
-    document.getElementById('val-twist').textContent    = e.twist.toFixed(1) + '°';
+    infoEls.type.textContent     = e.pointerType || '---';
+    infoEls.pressure.textContent = e.pressure.toFixed(3);
+    infoEls.tiltX.textContent    = e.tiltX.toFixed(1) + '°';
+    infoEls.tiltY.textContent    = e.tiltY.toFixed(1) + '°';
+    infoEls.azimuth.textContent  = toDeg(e.azimuthAngle) + '°';
+    infoEls.altitude.textContent = toDeg(e.altitudeAngle) + '°';
+    infoEls.twist.textContent    = e.twist.toFixed(1) + '°';
 }
 
 
