@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# JetBrains IDEs
+.idea/
+
+# VS Code
+.vscode/
+
+# Node (if ever added)
+node_modules/

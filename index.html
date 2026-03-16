@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Stylus Hello World</title>
+    <link rel="stylesheet" href="style.css"/>
+</head>
+<body oncontextmenu="return false;">
+
+<div id="toolbar">
+    <button onclick="clearCanvas()">Clear</button>
+    <span class="info-item">Type: <span id="val-type" class="val">---</span></span>
+    <span class="info-item">Pressure: <span id="val-pressure" class="val">---</span></span>
+    <span class="info-item">Tilt X: <span id="val-tiltX" class="val">---</span></span>
+    <span class="info-item">Tilt Y: <span id="val-tiltY" class="val">---</span></span>
+    <span class="info-item">Azimuth: <span id="val-azimuth" class="val">---</span></span>
+    <span class="info-item">Altitude: <span id="val-altitude" class="val">---</span></span>
+    <span class="info-item">Twist: <span id="val-twist" class="val">---</span></span>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script src="app.js"></script>
+</body>
+</html>
