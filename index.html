@@ -9,6 +9,14 @@
 
 <div id="toolbar">
     <button onclick="clearCanvas()">Clear</button>
+    <span class="info-item">Mode:
+        <select id="mode">
+            <option value="pressure-size">Pressure to Size</option>
+            <option value="azimuth-rotation">Tilt Azimuth to Brush rotation</option>
+            <option value="altitude-size">Tilt Altitude to Brush size</option>
+            <option value="twist-rotation">Twist to Brush rotation</option>
+        </select>
+    </span>
     <span class="info-item">Type: <span id="val-type" class="val">---</span></span>
     <span class="info-item">Pressure: <span id="val-pressure" class="val">---</span></span>
     <span class="info-item">Tilt X: <span id="val-tiltX" class="val">---</span></span>

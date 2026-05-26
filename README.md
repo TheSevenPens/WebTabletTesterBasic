@@ -22,6 +22,16 @@ A single-page static site — no build step, no dependencies.
 You don't need to serve this app with a webserver.
 
 
+## Testing modes
+The toolbar has a **Mode** dropdown that selects which pen property drives the brush. Each mode is meant to isolate one input so a behavior problem can be narrowed down quickly.
+
+- **Pressure to Size** — circular brush. Stroke width scales with `e.pressure`. Default mode.
+- **Tilt Azimuth to Brush rotation** — fixed oval brush, rotated by `e.azimuthAngle` (the compass direction the pen is leaning).
+- **Tilt Altitude to Brush size** — oval brush. When the pen is upright (`altitudeAngle` ≈ π/2) the brush is a small circle; as the pen tilts toward flat (`altitudeAngle` → 0) the long axis grows up to ~2× `OVAL_RADIUS_X`. Rotation is driven by `e.azimuthAngle`, so the brush stretches in the direction the pen is leaning.
+- **Twist to Brush rotation** — fixed oval brush, rotated by `-e.twist` (inverted so the brush rotates in the same visual direction the pen barrel is turning, for the hardware tested).
+
+The rotation modes deliberately use a very elongated oval so that small changes in the driving angle are visible.
+
 ## Supported browsers / OSes
 <!-- TODO: list the actual support targets. The Safari/macOS quirk below implies macOS Safari is one — confirm and add the others (Chrome/Edge on Windows, Firefox, iPadOS Safari, etc.). -->
 
@@ -31,9 +41,12 @@ Mouse and touch are valid `pointerType` values, so you can smoke-test most of th
 - **Touch**: reports as `pointerType === "touch"`, no tilt/pressure on most devices.
 - **Pen**: required to actually exercise pressure, tilt, azimuth, altitude, and twist.
 
-There are no automated tests. Manual checks before shipping:
-- Pen: pressure varies stroke width; tiltX/Y, azimuth, altitude, twist readouts change as the pen moves/tilts/rotates
-- Mouse: draws a mid-width stroke (pressure 0.5)
+There are no automated tests. Manual checks before shipping (run each in the relevant Mode):
+- **Pressure to Size**: pen pressure varies stroke width; mouse draws a mid-width stroke (pressure 0.5)
+- **Tilt Azimuth to Brush rotation**: leaning the pen in different compass directions rotates the oval accordingly
+- **Tilt Altitude to Brush size**: upright pen produces a small circle; tilting the pen toward flat stretches the oval in the leaning direction
+- **Twist to Brush rotation**: rotating the pen barrel rotates the oval (only relevant on hardware that reports twist)
+- Readouts (tiltX/Y, azimuth, altitude, twist) update live regardless of mode
 - Delete / Backspace clears the canvas; the Clear button clears the canvas
 - Window resize re-fits and clears the canvas
 - Right-click does not open a context menu
