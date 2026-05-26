@@ -28,6 +28,16 @@ body {
     color: #000;
 }
 
+#repo-link {
+    margin-left: auto; /* push to far right of the flex toolbar */
+    color: #0366d6;
+    text-decoration: none;
+}
+
+#repo-link:hover {
+    text-decoration: underline;
+}
+
 #canvas {
     display: block;
     touch-action: none;        /* prevent browser gestures (pan, zoom) on the canvas */
