@@ -28,14 +28,38 @@ body {
     color: #000;
 }
 
-#repo-link {
+#about-btn {
     margin-left: auto; /* push to far right of the flex toolbar */
-    color: #0366d6;
-    text-decoration: none;
 }
 
-#repo-link:hover {
-    text-decoration: underline;
+#about-dialog {
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 20px 24px;
+    max-width: 420px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+#about-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+#about-dialog h2 {
+    font-size: 16px;
+    margin: 0 0 8px;
+}
+
+#about-dialog p {
+    margin: 0 0 12px;
+}
+
+#about-dialog ul {
+    margin: 0 0 16px;
+    padding-left: 20px;
+}
+
+#about-dialog a {
+    color: #0366d6;
 }
 
 #canvas {

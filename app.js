@@ -169,6 +169,13 @@ canvas.addEventListener('pointerleave', () => {
 });
 
 
+// ── About dialog ──────────────────────────────────────────────
+
+document.getElementById('about-btn').addEventListener('click', () => {
+    document.getElementById('about-dialog').showModal();
+});
+
+
 // ── Init ──────────────────────────────────────────────────────
 
 window.addEventListener('resize', resizeCanvas);
