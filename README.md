@@ -1,47 +1,32 @@
 # HtmlTabletTester
 
-## Overview
-The Tablet Tester is a simple online tool to better understand how digital pens work. It is useful for troubleshooting pen problems and as a basis for developers to explore pen behavior. It is **NOT** intended as a creative digital painting app — keep the scope narrow: a canvas, a live readout of `PointerEvent` properties, and nothing else. Resist adding colors, brushes, undo, layers, save/export, etc.
+A simple web app for verifying that drawing tablets and pens are working, and for inspecting what the Pointer Events API actually reports on a given device.
+
+**For end-user docs** (what the app does, how to use it, OS/browser support, troubleshooting), see **[USERMANUAL.md](./USERMANUAL.md)**. This README is for developers working on the app itself.
+
+## Scope guard
+This is **NOT** a creative digital painting app. Keep the scope narrow: a canvas, a Mode dropdown, and a live readout of `PointerEvent` properties. Resist adding colors, brushes, undo, layers, save/export, etc. If you find yourself reaching for those features, you're probably building a different app.
 
 ## Live site
-Hosted on GitHub Pages: <!-- TODO: paste the Pages URL, e.g. https://thesevenpens.github.io/WebTabletTesterBasic/ -->
+<https://thesevenpens.github.io/WebTabletTesterBasic/>
 
-## Repo relationship
-This repo is [`WebTabletTesterBasic`](https://github.com/TheSevenPens/WebTabletTesterBasic)
+## Repo
+[`WebTabletTesterBasic`](https://github.com/TheSevenPens/WebTabletTesterBasic)
 
 ## Project layout
 A single-page static site — no build step, no dependencies.
 
-- `index.html` — toolbar (Clear button + live readouts) and the fullscreen `<canvas>`
-- `app.js` — Pointer Events wiring, drawing, info display
-- `style.css` — toolbar layout; `touch-action: none` and `overscroll-behavior: none` on the canvas to suppress browser pan/zoom/pull-to-refresh while drawing
+- `index.html` — toolbar (Clear, Mode dropdown, live readouts, About) and the fullscreen `<canvas>`; About dialog markup
+- `app.js` — Pointer Events wiring, drawing (circular + oval-stamp brushes), info display, About-dialog handler
+- `style.css` — toolbar layout; `touch-action: none` and `overscroll-behavior: none` on the canvas to suppress browser pan/zoom/pull-to-refresh while drawing; About-dialog styling
+- `USERMANUAL.md` — end-user documentation (linked from the README and the in-app About dialog)
 
 ## Running locally
-- Open `index.html` directly in a browser (`file://`)
+Open `index.html` directly in a browser (`file://`). No webserver needed.
 
-You don't need to serve this app with a webserver.
+## Manual checks before shipping
+There are no automated tests. Run each in the relevant **Mode** before pushing changes that touch drawing or pointer handling:
 
-
-## Testing modes
-The toolbar has a **Mode** dropdown that selects which pen property drives the brush. Each mode is meant to isolate one input so a behavior problem can be narrowed down quickly.
-
-- **Pressure to Size** — circular brush. Stroke width scales with `e.pressure`. Default mode.
-- **Tilt Azimuth to Brush rotation** — fixed oval brush, rotated by `e.azimuthAngle` (the compass direction the pen is leaning).
-- **Tilt Altitude to Brush size** — oval brush. When the pen is upright (`altitudeAngle` ≈ π/2) the brush is a small circle; as the pen tilts toward flat (`altitudeAngle` → 0) the long axis grows up to ~2× `OVAL_RADIUS_X`. Rotation is driven by `e.azimuthAngle`, so the brush stretches in the direction the pen is leaning.
-- **Twist to Brush rotation** — fixed oval brush, rotated by `-e.twist` (inverted so the brush rotates in the same visual direction the pen barrel is turning, for the hardware tested).
-
-The rotation modes deliberately use a very elongated oval so that small changes in the driving angle are visible.
-
-## Supported browsers / OSes
-<!-- TODO: list the actual support targets. The Safari/macOS quirk below implies macOS Safari is one — confirm and add the others (Chrome/Edge on Windows, Firefox, iPadOS Safari, etc.). -->
-
-## Testing without a pen
-Mouse and touch are valid `pointerType` values, so you can smoke-test most of the UI without a stylus:
-- **Mouse**: `e.pressure` is reported as `0.5` (synthesized), tilt/azimuth/twist are `0`. Good enough to verify drawing, clear, and resize.
-- **Touch**: reports as `pointerType === "touch"`, no tilt/pressure on most devices.
-- **Pen**: required to actually exercise pressure, tilt, azimuth, altitude, and twist.
-
-There are no automated tests. Manual checks before shipping (run each in the relevant Mode):
 - **Pressure to Size**: pen pressure varies stroke width; mouse draws a mid-width stroke (pressure 0.5)
 - **Tilt Azimuth to Brush rotation**: leaning the pen in different compass directions rotates the oval accordingly
 - **Tilt Altitude to Brush size**: upright pen produces a small circle; tilting the pen toward flat stretches the oval in the leaning direction
@@ -50,19 +35,13 @@ There are no automated tests. Manual checks before shipping (run each in the rel
 - Delete / Backspace clears the canvas; the Clear button clears the canvas
 - Window resize re-fits and clears the canvas
 - Right-click does not open a context menu
+- About button opens the dialog; Esc and the dialog's Close button both dismiss it
 
-## Known browser/OS quirks
-
-- MacOS Safari - When the app starts and the pen is already contacting the tablet, then pen may be treated as a mouse. This is a MacOS issues. The workaround is to initially move the pen away from the tablet and then bring it back in range. 
+For OS/browser-specific quirks (and what's known to work), see the [User Manual](./USERMANUAL.md#os--browser-compatibility).
 
 ## Deployment
-Pushes to `main` are published automatically by GitHub Pages. <!-- TODO: confirm — is Pages set to build from `main` root, a `docs/` folder, or a `gh-pages` branch? Any custom domain / CNAME? -->
-
-## Docs
-https://docs.thesevenpens.com/drawtab/developers/online-tablet-tester
-
-## Code
-https://github.com/TheSevenPens/WebTabletTesterBasic
+Pushes to `main` are published automatically by GitHub Pages.
 
 ## Developer resources
-https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events
+- MDN Pointer Events API: <https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events>
+- Original docs page: <https://docs.sevenpens.com/drawtab/resources/sevenpens-tablet-tester>
