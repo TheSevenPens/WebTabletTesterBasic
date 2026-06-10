@@ -18,6 +18,7 @@
 const canvas  = document.getElementById('canvas');
 const toolbar = document.getElementById('toolbar');
 const modeSelect = document.getElementById('mode');
+const cursorIndicator = document.getElementById('cursor-indicator');
 const ctx = canvas.getContext('2d');
 
 const infoEls = {
@@ -141,11 +142,19 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
     updateInfo(e);
+    const mode = modeSelect.value;
+
+    if (mode === 'pointer-only') {
+        // Show a visible cursor at the reported position; never draw.
+        // The indicator stays visible even when the pen is pressing down.
+        showCursorIndicator(e);
+        return;
+    }
+    hideCursorIndicator();
+
     if (!isDrawing) return;
 
     const pos = { x: e.offsetX, y: e.offsetY };
-    const mode = modeSelect.value;
-
     if (mode === 'pressure-size') {
         // Pressure (0–1) scales the brush size.
         // Mouse events report pressure as 0.5, so they get a mid-size brush.
@@ -166,6 +175,24 @@ canvas.addEventListener('pointerup', () => {
 canvas.addEventListener('pointerleave', () => {
     isDrawing = false;
     lastPos = null;
+    hideCursorIndicator();
+});
+
+
+// ── Cursor indicator (Pointer-only mode) ──────────────────────
+
+function showCursorIndicator(e) {
+    cursorIndicator.style.left = e.clientX + 'px';
+    cursorIndicator.style.top = e.clientY + 'px';
+    cursorIndicator.hidden = false;
+}
+
+function hideCursorIndicator() {
+    cursorIndicator.hidden = true;
+}
+
+modeSelect.addEventListener('change', () => {
+    if (modeSelect.value !== 'pointer-only') hideCursorIndicator();
 });
 
 

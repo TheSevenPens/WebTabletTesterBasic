@@ -67,3 +67,10 @@ body {
     touch-action: none;        /* prevent browser gestures (pan, zoom) on the canvas */
     overscroll-behavior: none; /* prevent pull-to-refresh and similar OS gestures */
 }
+
+#cursor-indicator {
+    position: fixed;
+    margin: -16px 0 0 -16px;   /* center the 32x32 crosshair on the reported position */
+    pointer-events: none;       /* never intercept pen/mouse events */
+    z-index: 10;
+}

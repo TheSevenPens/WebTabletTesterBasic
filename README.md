@@ -31,6 +31,7 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - **Tilt Azimuth to Brush rotation**: leaning the pen in different compass directions rotates the oval accordingly
 - **Tilt Altitude to Brush size**: upright pen produces a small circle; tilting the pen toward flat stretches the oval in the leaning direction
 - **Twist to Brush rotation**: rotating the pen barrel rotates the oval (only relevant on hardware that reports twist)
+- **Pointer only (no drawing)**: a red crosshair follows the pointer; no strokes are drawn. Crosshair stays visible while pressing. Crosshair hides on pointerleave and when switching to another mode.
 - Readouts (tiltX/Y, azimuth, altitude, twist) update live regardless of mode
 - Delete / Backspace clears the canvas; the Clear button clears the canvas
 - Window resize re-fits and clears the canvas
