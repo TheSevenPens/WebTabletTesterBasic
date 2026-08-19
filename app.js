@@ -29,7 +29,13 @@ const infoEls = {
     azimuth:  document.getElementById('val-azimuth'),
     altitude: document.getElementById('val-altitude'),
     twist:    document.getElementById('val-twist'),
+    eraser:   document.getElementById('val-eraser'),
+    buttons:  document.getElementById('val-buttons'),
 };
+
+// PointerEvent.buttons is a bitmask. Bit 5 (value 32) is the eraser end
+// of a stylus per the Pointer Events spec.
+const ERASER_BUTTON_BIT = 32;
 
 const CANVAS_BG = '#e6e6fa';
 const MAX_BRUSH_SIZE = 50; // brush diameter in pixels at full pressure
@@ -123,6 +129,10 @@ function updateInfo(e) {
     infoEls.azimuth.textContent  = toDeg(e.azimuthAngle) + '°';
     infoEls.altitude.textContent = toDeg(e.altitudeAngle) + '°';
     infoEls.twist.textContent    = e.twist.toFixed(1) + '°';
+    infoEls.eraser.textContent   = (e.buttons & ERASER_BUTTON_BIT) ? 'yes' : 'no';
+    // Show the buttons bitmask as a 6-bit binary string so all defined
+    // pointer buttons (tip, barrel, middle, X1, X2, eraser) are visible.
+    infoEls.buttons.textContent  = '0b' + e.buttons.toString(2).padStart(6, '0');
 }
 
 

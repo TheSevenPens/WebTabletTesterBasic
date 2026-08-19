@@ -29,6 +29,8 @@ It is **not** a drawing app — there are no colors, brushes, layers, or save/ex
 | **Azimuth** | 0° – 360°. Compass direction the pen is leaning. |
 | **Altitude** | 0° – 90°. 0° = pen flat on the tablet, 90° = perfectly upright. |
 | **Twist** | 0° – 359°. Rotation around the pen's long axis (barrel rotation). |
+| **Eraser** | `yes` when the eraser end of the pen is in contact, `no` otherwise. Detected via the eraser bit (32) of `PointerEvent.buttons`. Not all pens have an eraser end, and some drivers report the eraser as a normal tip contact — see [Known quirks](#known-quirks). |
+| **Buttons** | The raw `PointerEvent.buttons` bitmask shown in binary (6 bits). From least significant: tip/primary, barrel/secondary, middle, X1, X2, eraser. Handy for spotting which buttons your driver reports. |
 | **About** | Opens a dialog with Code and Docs links. |
 
 If a value stays at `0` or `---` while you draw, your pen or driver isn't reporting that property.
@@ -64,6 +66,7 @@ The rotation modes deliberately use a very elongated oval so that small changes 
 - **Windows, no pressure** — If pressure reads `0.000` or jumps straight to `1.000` with no in-between, the driver is most likely running in WinTab-only mode. Enable Windows Ink in your tablet's driver utility.
 - **Apple Pencil twist** — Apple Pencil does not report barrel rotation; **Twist** will stay at `0°`.
 - **Most pens, no twist** — Twist requires hardware support (e.g. Wacom Art Pen). Most styli will report `0°`.
+- **Eraser detection is driver-dependent** — Pens with a physical eraser end (e.g. many Wacom pens) will set the eraser bit on Windows Chrome/Edge/Firefox with Windows Ink enabled. Apple Pencil has no eraser end. Some pens/drivers map the eraser to a normal tip contact plus a configurable button, so the **Eraser** readout stays `no` even when the eraser is touching the tablet.
 - **Mouse / touch values** — Mouse always reports pressure `0.5` and zero tilt/azimuth/altitude/twist. Touch typically reports no pressure or tilt either. These are not bugs in the tester — they reflect what the browser delivers.
 
 ## Privacy
