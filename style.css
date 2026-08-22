@@ -28,8 +28,8 @@ body {
     color: #000;
 }
 
-#about-btn {
-    margin-left: auto; /* push to far right of the flex toolbar */
+#export {
+    margin-left: auto; /* push Export (and the About button after it) to far right */
 }
 
 #about-dialog {

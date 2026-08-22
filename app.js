@@ -206,6 +206,41 @@ modeSelect.addEventListener('change', () => {
 });
 
 
+// ── Export ────────────────────────────────────────────────────
+
+const exportSelect = document.getElementById('export');
+
+exportSelect.addEventListener('change', () => {
+    const action = exportSelect.value;
+    exportSelect.value = ''; // reset so the user can pick the same action again
+    if (action === 'png') exportPng();
+    else if (action === 'clipboard') exportClipboard();
+});
+
+function exportPng() {
+    canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'tablet-tester.png';
+        a.click();
+        URL.revokeObjectURL(url);
+    }, 'image/png');
+}
+
+function exportClipboard() {
+    canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        try {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        } catch (err) {
+            alert('Copy to clipboard failed: ' + err.message);
+        }
+    }, 'image/png');
+}
+
+
 // ── About dialog ──────────────────────────────────────────────
 
 document.getElementById('about-btn').addEventListener('click', () => {

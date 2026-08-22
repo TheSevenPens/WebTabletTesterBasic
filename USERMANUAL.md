@@ -21,6 +21,7 @@ It is **not** a drawing app — there are no colors, brushes, layers, or save/ex
 | Control | What it shows / does |
 | --- | --- |
 | **Clear** | Wipes the canvas. |
+| **Export…** | Save the current canvas as a PNG file, or copy it to the clipboard as an image (paste into chat, an image editor, etc.). Useful for sharing what your pen is producing when reporting a driver issue. |
 | **Mode** | Picks which pen input drives the brush — see below. |
 | **Type** | `pen`, `mouse`, or `touch` — what the browser thinks the input device is. |
 | **Pressure** | 0.000 – 1.000. Mouse always reports `0.5`. |

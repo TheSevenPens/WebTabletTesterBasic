@@ -37,6 +37,8 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - Window resize re-fits and clears the canvas
 - Right-click does not open a context menu
 - About button opens the dialog; Esc and the dialog's Close button both dismiss it
+- Export → Save as PNG downloads a `tablet-tester.png` file matching what's on the canvas
+- Export → Copy to clipboard pastes as an image into another app (needs a browser with async `ClipboardItem` support)
 
 For OS/browser-specific quirks (and what's known to work), see the [User Manual](./USERMANUAL.md#os--browser-compatibility).
 
