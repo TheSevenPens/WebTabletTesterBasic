@@ -17,7 +17,7 @@ This is **NOT** a creative digital painting app. Keep the scope narrow: a canvas
 A single-page static site — no build step, no dependencies.
 
 - `index.html` — toolbar (Clear, Mode dropdown, live readouts, About) and the fullscreen `<canvas>`; About dialog markup
-- `app.js` — Pointer Events wiring, drawing (circular + oval-stamp brushes), info display, About-dialog handler
+- `app.js` — Pointer Events wiring, canvas sizing (HiDPI-aware: backing store in screen pixels, context scaled so drawing code stays in CSS pixels), drawing (circular + oval-stamp brushes), info display, About-dialog handler
 - `style.css` — toolbar layout; `touch-action: none` and `overscroll-behavior: none` on the canvas to suppress browser pan/zoom/pull-to-refresh while drawing; About-dialog styling
 - `USERMANUAL.md` — end-user documentation (linked from the README and the in-app About dialog)
 
@@ -35,9 +35,10 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - Readouts (tiltX/Y, azimuth, altitude, twist) update live regardless of mode
 - Delete / Backspace clears the canvas; the Clear button clears the canvas
 - Window resize re-fits and clears the canvas
+- **HiDPI rendering**: on a display with `devicePixelRatio` > 1, stroke edges are crisp rather than blocky. Browser zoom (Ctrl +/-) and dragging the window to a monitor with a different scale factor both re-size the backing store and keep strokes crisp
 - Right-click does not open a context menu
 - About button opens the dialog; Esc and the dialog's Close button both dismiss it
-- Export → Save as PNG downloads a `tablet-tester.png` file matching what's on the canvas
+- Export → Save as PNG downloads a `tablet-tester.png` file matching what's on the canvas, at the display's full pixel resolution (on a 2x display a 1200x800 window exports a 2400x1600 image)
 - Export → Copy to clipboard pastes as an image into another app (needs a browser with async `ClipboardItem` support)
 
 For OS/browser-specific quirks (and what's known to work), see the [User Manual](./USERMANUAL.md#os--browser-compatibility).

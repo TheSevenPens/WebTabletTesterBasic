@@ -46,15 +46,81 @@ const OVAL_STAMP_SPACING = 2; // px between stamps along a stroke
 
 // ── Canvas setup ─────────────────────────────────────────────
 
+// The canvas is laid out in CSS pixels but its backing store is sized in real
+// screen pixels, with the context scaled to match. Without this the bitmap is
+// stretched by the compositor on any HiDPI display — at devicePixelRatio 2 a
+// stroke is rasterised at half the display's resolution and then upscaled,
+// which reads as blocky edges and hides the sub-pixel precision a pen reports.
+// All drawing code keeps working in CSS pixels, so brush sizes and the pointer
+// event's offsetX/offsetY need no adjustment.
+
+// Exact device-pixel content box for the canvas, as reported by
+// ResizeObserver. Null until the observer first fires, and on browsers that do
+// not support the device-pixel-content-box.
+let devicePixelBox = null;
+
+// Sizes last applied, so repeat calls with nothing to do are skipped.
+let applied = { cssWidth: 0, cssHeight: 0, width: 0, height: 0 };
+
+let resizeRafId = 0;
+
+// Coalesce bursts of resize/observer callbacks into one resize per frame.
+function scheduleResize() {
+    if (resizeRafId) return;
+    resizeRafId = requestAnimationFrame(() => {
+        resizeRafId = 0;
+        resizeCanvas();
+    });
+}
+
+// Backing-store size in real screen pixels. The observer's device-pixel
+// content box is exact; rounding the CSS box by devicePixelRatio is the
+// fallback for browsers that do not report it, and can drift by a fraction of
+// a pixel when the layout size is fractional.
+function backingSize(cssWidth, cssHeight) {
+    if (devicePixelBox && devicePixelBox.width > 0 && devicePixelBox.height > 0) {
+        return devicePixelBox;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    return {
+        width: Math.max(1, Math.round(cssWidth * dpr)),
+        height: Math.max(1, Math.round(cssHeight * dpr)),
+    };
+}
+
 function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight - toolbar.offsetHeight;
+    const cssWidth = Math.max(1, window.innerWidth);
+    const cssHeight = Math.max(1, window.innerHeight - toolbar.offsetHeight);
+
+    // Layout size, in CSS pixels.
+    canvas.style.width = cssWidth + 'px';
+    canvas.style.height = cssHeight + 'px';
+
+    const { width, height } = backingSize(cssWidth, cssHeight);
+    if (width === applied.width && height === applied.height &&
+        cssWidth === applied.cssWidth && cssHeight === applied.cssHeight) {
+        return;
+    }
+    applied = { cssWidth, cssHeight, width, height };
+
+    // Backing-store size, in screen pixels.
+    canvas.width = width;
+    canvas.height = height;
+
+    // Assigning width/height resets the context, so the scale has to be
+    // (re)applied every time the canvas is sized.
+    ctx.setTransform(width / cssWidth, 0, 0, height / cssHeight, 0, 0);
     clearCanvas();
 }
 
 function clearCanvas() {
+    // Fill the whole backing store, which is measured in screen pixels, so
+    // drop the CSS-pixel scale for the duration of the fill.
+    const transform = ctx.getTransform();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = CANVAS_BG;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(transform);
 }
 
 
@@ -225,7 +291,9 @@ function exportPng() {
         a.href = url;
         a.download = 'tablet-tester.png';
         a.click();
-        URL.revokeObjectURL(url);
+        // click() only queues the download, so the blob URL has to outlive this
+        // tick — revoking synchronously races the browser's read of the blob.
+        setTimeout(() => URL.revokeObjectURL(url), 0);
     }, 'image/png');
 }
 
@@ -250,7 +318,25 @@ document.getElementById('about-btn').addEventListener('click', () => {
 
 // ── Init ──────────────────────────────────────────────────────
 
-window.addEventListener('resize', resizeCanvas);
+window.addEventListener('resize', scheduleResize);
+
+// Picks up device-pixel-ratio changes that leave the CSS size unchanged —
+// browser zoom, or moving the window to a monitor with a different scale
+// factor — which the window resize event alone can miss.
+const resizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+        const box = entry.devicePixelContentBoxSize?.[0];
+        if (box) devicePixelBox = { width: box.inlineSize, height: box.blockSize };
+    }
+    scheduleResize();
+});
+try {
+    resizeObserver.observe(canvas, { box: 'device-pixel-content-box' });
+} catch {
+    // Browsers without device-pixel-content-box support fall back to
+    // devicePixelRatio in backingSize().
+    resizeObserver.observe(canvas);
+}
 
 // Delete or Backspace clears the canvas
 document.addEventListener('keydown', (e) => {
