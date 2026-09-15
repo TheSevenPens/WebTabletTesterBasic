@@ -36,7 +36,8 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - **Pressure to Size**: pen pressure varies stroke width; mouse draws a mid-width stroke (pressure 0.5)
 - Strokes are smooth: width ramps between readings rather than stepping, and a quickly drawn arc has no visible corners. A slowly drawn one is reasonably even, though not perfectly — that residue is quantisation, not a regression
 - A stroke begins exactly where the pen touched down. The filter must not drag the first point toward anywhere else The ink lags the pen by one reading, and the final segment appears when the pen lifts — a stroke must not end short of where the pen was raised
-- **Points/s** shows a number while a real pointer is moving, returns to `---` within about half a second of it stopping, and reads `n/a` in a browser without `getCoalescedEvents()`. Events dispatched from script contribute nothing, so this cannot be checked by automation
+- **Points/s** shows a number while a real pointer is moving, returns to `---` within about half a second of it stopping, and reads `n/a` in a browser without `getCoalescedEvents()`. A plain dispatched event contributes nothing — an untrusted event's coalesced list is empty by definition — so the figure a real tablet produces needs a real tablet. The calculation itself can be driven by stubbing `getCoalescedEvents` on a dispatched event, which is how the per-pointer behaviour below was checked
+- **Points/s belongs to one pointer.** Moving a mouse while a pen is reporting must not inflate the pen's figure. The window resets when the pointer changes, so alternating devices shows `---` rather than a number that belongs to neither
 - **Tilt Azimuth to Brush rotation**: leaning the pen in different compass directions rotates the oval accordingly
 - **Tilt Altitude to Brush size**: upright pen produces a small circle; tilting the pen toward flat stretches the oval in the leaning direction
 - **Twist to Brush rotation**: rotating the pen barrel rotates the oval (only relevant on hardware that reports twist)
@@ -49,6 +50,11 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - Releasing updates the readouts to the released state; the pointer leaving blanks them
 - Twist rotates the brush the same way the pen turns
 - With `azimuthAngle`/`altitudeAngle` removed from `PointerEvent.prototype`, both tilt modes still draw and both readouts still show numbers
+- **A second contact does not join the stroke.** Resting a palm, or touching with another finger, while drawing: the stroke keeps following the pen, the readouts keep reporting the pen, and lifting the second contact does not end the stroke
+- **A stroke survives the toolbar.** Press on the canvas, drag up over the toolbar and back down without lifting: drawing resumes on return, and releasing over the toolbar ends the stroke there rather than at the edge
+- **Every mode draws from the whole batch.** A fast stroke that changes direction inside one frame keeps its corner in the oval modes, not only in Pressure to Size, and the brush angle follows the pen through the batch rather than jumping to its last value
+- **The toolbar does not move while drawing.** Tilt the pen hard enough to put a minus sign in Tilt X and take the angles past 100°: the toolbar's height must not change, and the canvas must not shift under the pen
+- **On a phone**, the controls and readouts are legible rather than shrunk to a third of their size, and pinch zoom still works
 - Delete / Backspace clears the canvas; the Clear button clears the canvas
 - Window resize re-fits and clears the canvas
 - **HiDPI rendering**: on a display with `devicePixelRatio` > 1, stroke edges are crisp rather than blocky. Browser zoom (Ctrl +/-) and dragging the window to a monitor with a different scale factor both re-size the backing store and keep strokes crisp
