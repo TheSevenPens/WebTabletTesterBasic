@@ -61,8 +61,8 @@ body {
     min-width: 8ch;
 }
 
-#val-coalesced {
-    min-width: 3ch;
+#val-rate {
+    min-width: 4ch;
 }
 
 /* A control that does not apply to the current mode. Dimmed here rather than in

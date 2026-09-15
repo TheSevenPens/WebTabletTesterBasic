@@ -32,7 +32,7 @@ const infoEls = {
     twist:    document.getElementById('val-twist'),
     eraser:   document.getElementById('val-eraser'),
     buttons:  document.getElementById('val-buttons'),
-    coalesced: document.getElementById('val-coalesced'),
+    rate:     document.getElementById('val-rate'),
 };
 
 // Whether this browser can say what it merged. Chrome, Edge and Firefox have had
@@ -503,30 +503,80 @@ function updateInfo(e) {
     // Show the buttons bitmask as a 6-bit binary string so all defined
     // pointer buttons (tip, barrel, middle, X1, X2, eraser) are visible.
     infoEls.buttons.textContent  = '0b' + e.buttons.toString(2).padStart(6, '0');
-    infoEls.coalesced.textContent = coalescedCount(e);
+    infoEls.rate.textContent = sampleRate();
 }
 
-// How many pen samples the browser merged into this one event.
+
+// ── Report rate ───────────────────────────────────────────────
+
+// How many positions the pen is reporting each second.
 //
-// A pointermove is delivered about once per animation frame, so a tablet
-// reporting at 200 Hz against a 60 Hz display has roughly three samples to hand
-// over and shows one. This is the only place in the app where the tablet's own
-// report rate is visible at all: every stroke drawn from pointermove alone is
-// sampled at the display's rate, not the pen's.
+// This is not the rate move events arrive at. A pointermove is delivered about
+// once per animation frame however fast the tablet reports, so counting events
+// would measure the display and call it the pen. What is counted here is the
+// samples inside each event, which is what getCoalescedEvents() hands back: the
+// ones the browser merged because it had nowhere to put them.
 //
-// Untrusted events report nothing. Anything dispatched from script has an empty
-// coalesced list by definition, so this reads 0 when the app is driven
-// programmatically and only means something under a real pen.
-function coalescedCount(e) {
+// Measured over a rolling second rather than a whole stroke, so the figure
+// follows what the pen is doing now.
+const RATE_WINDOW_MS = 1000;
+
+// Below this the window is too short to divide by and the answer would be noise.
+const RATE_MIN_SPAN_MS = 150;
+
+// After this much quiet the last figure is stale: the pen has stopped or left.
+const RATE_IDLE_MS = 400;
+
+let rateWindow = [];
+
+// Record what one move event actually carried.
+function noteSamples(e) {
+    if (!HAS_COALESCED || typeof e.getCoalescedEvents !== 'function') return;
+    if (e.type !== 'pointermove' && e.type !== 'pointerrawupdate') return;
+
+    // An untrusted event has an empty coalesced list by definition, so anything
+    // dispatched from script contributes nothing rather than a false zero.
+    const samples = e.getCoalescedEvents().length;
+    if (samples === 0) return;
+
+    const now = performance.now();
+
+    // A gap means the pen stopped, left, or was lifted between strokes. Carrying
+    // the old entries across it would divide this burst's samples by the pause as
+    // well, and report a rate far below the truth.
+    const previous = rateWindow[rateWindow.length - 1];
+    if (previous && now - previous.at > RATE_IDLE_MS) rateWindow = [];
+
+    rateWindow.push({ at: now, samples });
+    while (rateWindow.length > 1 && now - rateWindow[0].at > RATE_WINDOW_MS) rateWindow.shift();
+}
+
+function sampleRate() {
+    // Without getCoalescedEvents the only thing countable is move events, which
+    // is the display's rate wearing the pen's name. Better to say nothing.
     if (!HAS_COALESCED) return 'n/a';
+    if (rateWindow.length < 2) return '---';
 
-    // Only move events carry a list. On a press or a release there is nothing to
-    // have merged, and saying '1' there would invite reading it as a rate.
-    if (typeof e.getCoalescedEvents !== 'function') return '---';
-    if (e.type !== 'pointermove' && e.type !== 'pointerrawupdate') return '---';
+    const first = rateWindow[0];
+    const last = rateWindow[rateWindow.length - 1];
+    if (performance.now() - last.at > RATE_IDLE_MS) return '---';
 
-    return String(e.getCoalescedEvents().length);
+    const span = last.at - first.at;
+    if (span < RATE_MIN_SPAN_MS) return '---';
+
+    // The first entry's samples were reported before its timestamp, so they are
+    // outside the span being divided by and counting them would inflate the rate.
+    let samples = 0;
+    for (let i = 1; i < rateWindow.length; i++) samples += rateWindow[i].samples;
+
+    return String(Math.round(samples / span * 1000));
 }
+
+// The readouts are otherwise driven by pointer events, so without this the rate
+// would keep claiming whatever it last measured after the pen was lifted.
+setInterval(() => {
+    if (infoEls.rate.textContent !== '---') infoEls.rate.textContent = sampleRate();
+}, 200);
 
 
 // ── Pointer event state ───────────────────────────────────────
@@ -583,6 +633,7 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 canvas.addEventListener('pointermove', (e) => {
+    noteSamples(e);
     updateInfo(e);
     const mode = modeSelect.value;
 

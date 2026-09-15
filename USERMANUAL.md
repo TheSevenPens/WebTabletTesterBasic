@@ -37,7 +37,7 @@ moving under the pointer as values change width.
 | **Twist** | 0° – 359°. Rotation around the pen's long axis (barrel rotation). |
 | **Eraser** | `yes` when the eraser end of the pen is in contact, `no` otherwise. Detected via the eraser bit (32) of `PointerEvent.buttons`. Not all pens have an eraser end, and some drivers report the eraser as a normal tip contact — see [Known quirks](#known-quirks). |
 | **Buttons** | The raw `PointerEvent.buttons` bitmask shown in binary (6 bits). From least significant: tip/primary, barrel/secondary, middle, X1, X2, eraser. Handy for spotting which buttons your driver reports. |
-| **Coalesced** | How many pen samples the browser merged into the last move event — see [Report rate](#report-rate). `n/a` means this browser cannot say. |
+| **Points/s** | How many positions your pen is reporting each second — see [Report rate](#report-rate). `n/a` means this browser cannot say. |
 | **About** | Opens a dialog with Code and Docs links. |
 
 If a value stays at `0` or `---` while you draw, your pen or driver isn't reporting that property.
@@ -88,24 +88,34 @@ version on purpose so the two can be compared.
 
 ## Report rate
 
-A `pointermove` event is delivered about once per animation frame, not once per pen sample. A tablet
-reporting at 200 Hz against a 60 Hz display therefore has roughly three samples to hand over and
-shows you one; the rest are merged into it. **Coalesced** is how many were in that merge.
+**Points/s is how many positions your pen sends every second while you draw.** A mouse is usually
+around 125. Drawing tablets are typically 130 to 250, and some are much faster.
 
-- **1** every time — the browser is giving you everything it has, which usually means the tablet
-  reports at or below the display's refresh rate. A mouse normally reads 1.
-- **2 or more** while drawing — your tablet reports faster than the screen refreshes, and that is
-  the multiple. It rises with tablet speed and falls if the display is fast.
-- **`n/a`** — this browser has no `getCoalescedEvents()`. Chrome, Edge and Firefox have had it for
-  years; Safari only from **18.2**, so an older iPad or Mac reports `n/a` here.
-- **`---`** — nothing to report yet, or the last event was a press rather than a move.
-- **0** — the event was not real. Anything dispatched from script has an empty coalesced list by
-  definition, which only shows up if you are driving the app programmatically.
+It is worth knowing because it is the ceiling on how much detail any drawing application can have.
+A pen reporting 200 times a second gives an application 200 chances a second to notice that you
+changed direction or pressed harder. One reporting 60 gives it 60.
 
-Worth knowing: **the strokes on screen do not use the merged samples.** They are drawn from the one
-event per frame, so what you draw is sampled at the display's rate rather than the pen's. That is
-the ordinary way a web app handles pointer input, and this readout is how you can tell what it is
-costing you.
+**Why this is not simply "count the events".** The browser does not hand a web page every reading
+as it arrives. It waits until the screen is about to redraw — around 60 times a second on most
+displays — and delivers everything that has happened since in one go. Counting those deliveries
+would measure your *monitor* and call it your pen. This readout counts the readings inside each
+delivery, which is what `getCoalescedEvents()` exists to provide.
+
+**What the values mean**
+
+- **A number** — measured over the last second of movement. It settles after about a fifth of a
+  second of drawing.
+- **`---`** — nothing is moving, or not enough has happened yet to measure.
+- **`n/a`** — this browser cannot report it. Chrome, Edge and Firefox have been able to for years;
+  Safari only from **18.2**, so an older iPad or Mac says `n/a`. There is no way to measure the pen's
+  rate in those browsers: all a page can see is the display's.
+
+**One thing this readout reveals about the app itself.** The strokes on screen are drawn from one
+delivery per screen refresh, not from every reading. So if Points/s says 200, the stroke you are
+looking at was still drawn from roughly 60 positions a second, and the other 140 went unused. That
+is the ordinary way a web application handles pen input, and the gap between the two numbers is
+what interpolation — the **Taper (curved)** option under [Stroke rendering](#stroke-rendering) —
+is there to paper over.
 
 ## OS & browser compatibility
 
