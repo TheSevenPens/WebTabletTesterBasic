@@ -27,6 +27,7 @@ moving under the pointer as values change width.
 | **Clear** | Wipes the canvas. |
 | **Export…** | Save the current canvas as a PNG file, or copy it to the clipboard as an image (paste into chat, an image editor, etc.). The image is captured at your display's full pixel resolution, so stroke detail survives zooming in. Useful for sharing what your pen is producing when reporting a driver issue. |
 | **Mode** | Picks which pen input drives the brush — see below. |
+| **Edge** | Whether the boundary of a stroke is crisp or feathered — see [Why slow strokes look rough](#why-slow-strokes-look-rough). Pressure to Size only. |
 | **Fixed pressure** | Draw as though the pen were held at a constant half pressure. The Pressure readout still shows what the pen reports; only the stroke ignores it. Pressure to Size only. |
 | **Use all pen points** | Draw from every position the pen reported, instead of the one per screen refresh a browser hands over on its own — see [Report rate](#report-rate). Pressure to Size only, and only where the browser can supply them. |
 | **Stroke** | How the ink between two pen samples is drawn — see [Stroke rendering](#stroke-rendering). Only **Pressure to Size** draws that kind of ink, so the control is disabled in the other modes. |
@@ -178,6 +179,41 @@ it again with this ticked:
 The Pressure readout is deliberately left alone while this is on. It reports the pen, not the
 brush, and it would be a poor readout that lied about its instrument because a drawing setting
 changed.
+
+## Why slow strokes look rough
+
+Draw slowly and the edge of a stroke wobbles. Draw quickly and it comes out clean. This surprises
+people, because slow and careful ought to be the neat one.
+
+**The cause is in the path, not the pressure.** Tick **Fixed pressure**, which holds the width
+constant, and a slow stroke is still rough — so nothing about pressure is responsible. What is left
+is position: your hand and your pen together report a path that wanders by around a pixel, and drawn
+slowly that wander is packed into a short distance where it is easy to see. The same wander spread
+along a fast stroke disappears into the length of it.
+
+**Every one of those pixels is real.** The tester is not adding them. This is what your pen reported
+and what a drawing application receives.
+
+**So why does the same stroke look better in a painting application?** Largely because of the
+**Edge** setting. Most brushes have a soft, feathered rim rather than a crisp boundary, and a
+feather about a pixel wide is enough to swallow a wobble about a pixel wide. Switch **Edge** to
+**Soft** and draw the same slow stroke: the wander is still there, but there is no longer a hard
+line for it to show up on.
+
+That is worth understanding rather than simply preferring. A hard edge is the honest setting and the
+reason this tool defaults to it — it shows you what your hardware actually did. A soft edge shows
+you what a painting application chooses to show you instead. Neither is wrong; they answer different
+questions.
+
+**Other things that change how visible it is,** none of which is the cause:
+
+- **Brush size.** Width is pressure times the maximum brush size, so a wide brush magnifies any
+  width variation. It scales the effect and does not create it.
+- **Stroke rendering.** Stepped, straight and curved all trace the same wandering path. The curve
+  fitter smooths the *route between* samples, not the samples themselves.
+- **Smoothing.** This tool has none. Painting applications filter the incoming path — Krita's
+  stabiliser, Clip Studio's stabilisation, Photoshop's smoothing — and that filtering is the other
+  half of why their strokes look calmer than the raw signal.
 
 ## OS & browser compatibility
 

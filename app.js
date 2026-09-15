@@ -21,12 +21,92 @@ const modeSelect = document.getElementById('mode');
 const strokeSelect = document.getElementById('stroke');
 const allPointsCheck = document.getElementById('allpoints');
 const fixedPressureCheck = document.getElementById('fixedpressure');
+const edgeSelect = document.getElementById('edge');
 
 /// Pressure to draw at when the pen's own is being ignored. Half, so the brush is
 /// mid-width and a stroke has room to look thicker or thinner than it.
 const FIXED_PRESSURE = 0.5;
 const cursorIndicator = document.getElementById('cursor-indicator');
 const ctx = canvas.getContext('2d');
+
+// Three surfaces, not one.
+//
+// A feathered edge cannot be drawn a segment at a time. The app lays down well over a
+// hundred heavily overlapping shapes a second, and anything translucent at the rim
+// composites again at every overlap, so a feather would band and darken along the
+// stroke. It is the same trap as building a taper from three shapes rather than one
+// closed contour, one level up.
+//
+// So the live stroke accumulates hard-edged in its own layer where overlaps are
+// harmless, and is presented once per frame through the feather. What the eye sees is
+// the finished shape softened once.
+//
+//   committed  every stroke that is finished, plus the background
+//   live       the stroke being drawn right now
+//   canvas     what is on screen: committed, then live, composited each frame
+const committed = document.createElement('canvas');
+const cctx = committed.getContext('2d');
+
+const live = document.createElement('canvas');
+const lctx = live.getContext('2d');
+
+// How far the soft edge reaches, in CSS pixels. Small: this is the difference between
+// a crisp boundary and a kind one, not a blur effect.
+const FEATHER = 1.2;
+
+let presentPending = false;
+
+function softEdge() {
+    return edgeSelect.value === 'soft';
+}
+
+// Ask for the screen to be brought up to date. Coalesced into one repaint per frame,
+// because at tablet report rates this is called far more often than the display can
+// show anything.
+function invalidate() {
+    if (presentPending) return;
+    presentPending = true;
+    requestAnimationFrame(present);
+}
+
+function present() {
+    presentPending = false;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(committed, 0, 0);
+    ctx.filter = featherFilter();
+    ctx.drawImage(live, 0, 0);
+    ctx.restore();
+}
+
+// The blur is applied while the transform is the identity, so its radius is in real
+// screen pixels and has to be scaled up from the CSS pixels the rest of the app
+// thinks in.
+function featherFilter() {
+    if (!softEdge()) return 'none';
+
+    const scale = canvas.width / Math.max(1, applied.cssWidth);
+    return `blur(${(FEATHER * scale).toFixed(2)}px)`;
+}
+
+// Fold the finished stroke into the picture, through the same feather it was being
+// shown through, and start the next one on an empty layer.
+function commitStroke() {
+    cctx.save();
+    cctx.setTransform(1, 0, 0, 1, 0, 0);
+    cctx.filter = featherFilter();
+    cctx.drawImage(live, 0, 0);
+    cctx.restore();
+
+    lctx.save();
+    lctx.setTransform(1, 0, 0, 1, 0, 0);
+    lctx.clearRect(0, 0, live.width, live.height);
+    lctx.restore();
+
+    invalidate();
+}
 
 const infoEls = {
     type:     document.getElementById('val-type'),
@@ -135,18 +215,36 @@ function resizeCanvas() {
 
     // Assigning width/height resets the context, so the scale has to be
     // (re)applied every time the canvas is sized.
-    ctx.setTransform(width / cssWidth, 0, 0, height / cssHeight, 0, 0);
+    committed.width = live.width = width;
+    committed.height = live.height = height;
+
+    // Assigning width/height resets a context, so every scale has to be reapplied.
+    for (const context of [ctx, cctx, lctx]) {
+        context.setTransform(width / cssWidth, 0, 0, height / cssHeight, 0, 0);
+    }
+
     clearCanvas();
 }
 
 function clearCanvas() {
-    // Fill the whole backing store, which is measured in screen pixels, so
-    // drop the CSS-pixel scale for the duration of the fill.
-    const transform = ctx.getTransform();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = CANVAS_BG;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.setTransform(transform);
+    // The background belongs to the committed picture now, not to the screen: the
+    // screen is rebuilt from these two layers every frame and would lose anything
+    // painted straight onto it.
+    //
+    // Filled with the scale dropped, because a backing store is measured in screen
+    // pixels while everything else here is in CSS pixels.
+    cctx.save();
+    cctx.setTransform(1, 0, 0, 1, 0, 0);
+    cctx.fillStyle = CANVAS_BG;
+    cctx.fillRect(0, 0, committed.width, committed.height);
+    cctx.restore();
+
+    lctx.save();
+    lctx.setTransform(1, 0, 0, 1, 0, 0);
+    lctx.clearRect(0, 0, live.width, live.height);
+    lctx.restore();
+
+    invalidate();
 }
 
 
@@ -159,14 +257,14 @@ function clearCanvas() {
 // stroke is a staircase rather than a ramp. Kept as a choice because seeing the
 // artefact is half of understanding why the taper below exists.
 function drawSteppedSegment(from, to) {
-    ctx.lineWidth = widthFor(to.pressure);
-    ctx.strokeStyle = 'black';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
+    lctx.lineWidth = widthFor(to.pressure);
+    lctx.strokeStyle = 'black';
+    lctx.lineCap = 'round';
+    lctx.lineJoin = 'round';
+    lctx.beginPath();
+    lctx.moveTo(from.x, from.y);
+    lctx.lineTo(to.x, to.y);
+    lctx.stroke();
 }
 
 // Brush diameter for one pressure reading. Mouse events report 0.5, so a mouse
@@ -196,15 +294,15 @@ function drawTaperSegment(from, to) {
     const dx = b.x - a.x, dy = b.y - a.y;
     const d = Math.hypot(dx, dy);
 
-    ctx.fillStyle = 'black';
-    ctx.beginPath();
+    lctx.fillStyle = 'black';
+    lctx.beginPath();
 
     // Degenerate: the centres coincide, or one circle swallows the other. There are
     // no tangents to compute and the union is just the larger circle.
     if (d <= Math.abs(ra - rb) + 1e-4) {
-        if (ra >= rb) ctx.arc(a.x, a.y, ra, 0, Math.PI * 2);
-        else ctx.arc(b.x, b.y, rb, 0, Math.PI * 2);
-        ctx.fill();
+        if (ra >= rb) lctx.arc(a.x, a.y, ra, 0, Math.PI * 2);
+        else lctx.arc(b.x, b.y, rb, 0, Math.PI * 2);
+        lctx.fill();
         return;
     }
 
@@ -215,17 +313,17 @@ function drawTaperSegment(from, to) {
     const up = phi + Math.PI / 2 + alpha;
     const down = phi - Math.PI / 2 - alpha;
 
-    ctx.moveTo(a.x + ra * Math.cos(up), a.y + ra * Math.sin(up));
-    ctx.lineTo(b.x + rb * Math.cos(up), b.y + rb * Math.sin(up));
+    lctx.moveTo(a.x + ra * Math.cos(up), a.y + ra * Math.sin(up));
+    lctx.lineTo(b.x + rb * Math.cos(up), b.y + rb * Math.sin(up));
 
     // Round the far end, then the near one. Both sweeps run the same way round so the
     // contour stays simple; together they account for the full turn the caps share.
-    ctx.arc(b.x, b.y, rb, up, up - (Math.PI + 2 * alpha), true);
-    ctx.lineTo(a.x + ra * Math.cos(down), a.y + ra * Math.sin(down));
-    ctx.arc(a.x, a.y, ra, down, down - (Math.PI - 2 * alpha), true);
+    lctx.arc(b.x, b.y, rb, up, up - (Math.PI + 2 * alpha), true);
+    lctx.lineTo(a.x + ra * Math.cos(down), a.y + ra * Math.sin(down));
+    lctx.arc(a.x, a.y, ra, down, down - (Math.PI - 2 * alpha), true);
 
-    ctx.closePath();
-    ctx.fill();
+    lctx.closePath();
+    lctx.fill();
 }
 
 function clamp(value, low, high) {
@@ -233,11 +331,13 @@ function clamp(value, low, high) {
 }
 
 // Stamp an oval at `pos` with the given radii and rotation.
+// Straight into the committed picture. The oval modes stamp rather than stroke, so
+// there is no edge to feather and nothing to gain from holding them in a layer.
 function stampOval(pos, brush) {
-    ctx.fillStyle = 'black';
-    ctx.beginPath();
-    ctx.ellipse(pos.x, pos.y, brush.rx, brush.ry, brush.rot, 0, Math.PI * 2);
-    ctx.fill();
+    cctx.fillStyle = 'black';
+    cctx.beginPath();
+    cctx.ellipse(pos.x, pos.y, brush.rx, brush.ry, brush.rot, 0, Math.PI * 2);
+    cctx.fill();
 }
 
 // Draw an oval-brush stroke from `from` to `to` by stamping ovals
@@ -252,6 +352,7 @@ function drawOvalStroke(from, to, brush) {
         const t = i / steps;
         stampOval({ x: from.x + dx * t, y: from.y + dy * t }, brush);
     }
+    invalidate();
 }
 
 // Build the brush spec {rx, ry, rot} for the current oval-brush mode.
@@ -666,6 +767,7 @@ function drawTo(point) {
     if (lastDrawn) {
         if (strokeSelect.value === 'stepped') drawSteppedSegment(lastDrawn, point);
         else drawTaperSegment(lastDrawn, point);
+        invalidate();
     }
     lastDrawn = point;
 }
@@ -673,6 +775,7 @@ function drawTo(point) {
 // Paint whatever the fitter is still holding back, and forget the stroke.
 function endStroke() {
     for (const point of fitter.flush(isCurved())) drawTo(point);
+    commitStroke();
     isDrawing = false;
     lastPos = null;
     lastDrawn = null;
@@ -770,6 +873,10 @@ function syncStrokeControl() {
 
     // Only one mode lets pressure near the brush, so only one mode can ignore it.
     fixedPressureCheck.disabled = !drawsStrokes;
+
+    // The oval modes stamp into the picture directly and have no live layer to
+    // feather, so there is nothing for this to change there.
+    edgeSelect.disabled = !drawsStrokes;
 }
 
 function usingAllPoints() {

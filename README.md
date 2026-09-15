@@ -19,7 +19,7 @@ The test that has held so far: a feature earns its place if it makes something a
 A single-page static site — no build step, no dependencies.
 
 - `index.html` — toolbar in two rows (controls on top: Clear, Mode, Stroke, Export, About; pen readouts underneath) and the fullscreen `<canvas>`; About dialog markup
-- `app.js` — Pointer Events wiring, canvas sizing (HiDPI-aware: backing store in screen pixels, context scaled so drawing code stays in CSS pixels), drawing (stepped and tapered segments, oval stamps), curve fitting, info display, About-dialog handler
+- `app.js` — Pointer Events wiring, canvas sizing (HiDPI-aware: backing store in screen pixels, context scaled so drawing code stays in CSS pixels), three drawing surfaces (committed picture, live stroke, and the visible canvas composited from them once per frame), drawing (stepped and tapered segments, oval stamps), curve fitting, info display, About-dialog handler
 - `style.css` — toolbar layout; `touch-action: none` and `overscroll-behavior: none` on the canvas to suppress browser pan/zoom/pull-to-refresh while drawing; About-dialog styling
 - `USERMANUAL.md` — end-user documentation (linked from the README and the in-app About dialog)
 
@@ -33,7 +33,9 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - **Stroke: Stepped width**: the edge of a stroke shows a visible staircase where pressure changes
 - **Stroke: Taper (straight)**: width ramps smoothly, and a quickly drawn arc shows corners where the chords meet
 - **Stroke: Taper (curved)**: the same stroke drawn again has no corners. The ink lags the pen by one sample, and the final segment appears when the pen lifts — a stroke must not end short of where the pen was raised
-- **Stroke**, **Fixed pressure** and **Use all pen points** are disabled and dimmed in every mode except Pressure to Size
+- **Stroke**, **Edge**, **Fixed pressure** and **Use all pen points** are disabled and dimmed in every mode except Pressure to Size
+- **Edge: Soft**: the stroke's boundary is feathered, both while it is being drawn and after the pen lifts — a stroke must not change appearance at the moment it is committed
+- Clear, window resize, the oval modes and Export all still work now that the visible canvas is composited rather than drawn into directly
 - **Fixed pressure**: stroke width stops responding to the pen while the Pressure readout keeps reporting it
 - **Use all pen points**: with it ticked, **used** rises to meet **pen** while drawing and the stroke follows a fast hand more closely; with it clear, **used** sits near the refresh rate. Disabled in the oval modes and in any browser without `getCoalescedEvents()`
 - **Tilt Azimuth to Brush rotation**: leaning the pen in different compass directions rotates the oval accordingly
