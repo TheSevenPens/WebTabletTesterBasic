@@ -27,7 +27,6 @@ moving under the pointer as values change width.
 | **Clear** | Wipes the canvas. |
 | **Export…** | Save the current canvas as a PNG file, or copy it to the clipboard as an image (paste into chat, an image editor, etc.). The image is captured at your display's full pixel resolution, so stroke detail survives zooming in. Useful for sharing what your pen is producing when reporting a driver issue. |
 | **Mode** | Picks which pen input drives the brush — see below. |
-| **Stroke** | How the ink between two pen samples is drawn — see [Stroke rendering](#stroke-rendering). Only **Pressure to Size** draws that kind of ink, so the control is disabled in the other modes. |
 | **Type** | `pen`, `mouse`, or `touch` — what the browser thinks the input device is. |
 | **Pressure** | 0.000 – 1.000. Mouse always reports `0.5`. |
 | **Tilt X** | -90° to 90°. Left/right tilt of the pen. |
@@ -37,6 +36,7 @@ moving under the pointer as values change width.
 | **Twist** | 0° – 359°. Rotation around the pen's long axis (barrel rotation). |
 | **Eraser** | `yes` when the eraser end of the pen is in contact, `no` otherwise. Detected via the eraser bit (32) of `PointerEvent.buttons`. Not all pens have an eraser end, and some drivers report the eraser as a normal tip contact — see [Known quirks](#known-quirks). |
 | **Buttons** | The raw `PointerEvent.buttons` bitmask shown in binary (6 bits). From least significant: tip/primary, barrel/secondary, middle, X1, X2, eraser. Handy for spotting which buttons your driver reports. |
+| **Points/s** | How many positions your pen reports each second — see [If a stroke looks segmented](#if-a-stroke-looks-segmented). |
 | **About** | Opens a dialog with Code and Docs links. |
 
 If a value stays at `0` or `---` while you draw, your pen or driver isn't reporting that property.
@@ -53,37 +53,30 @@ The **Mode** dropdown selects which pen property drives the brush. Each mode is 
 
 The rotation modes deliberately use a very elongated oval so that small changes in the driving angle are visible.
 
-## Stroke rendering
+## If a stroke looks segmented
 
-A pen reports samples, not a stroke. The **Stroke** dropdown picks what is drawn *between* two
-samples, which is where a surprising amount of what a stroke looks like is decided. It applies to
-**Pressure to Size**; the oval modes stamp ellipses and have no line width to ramp or path to fit.
+**Look at Points/s first.** It is how many positions your pen reports each second, and it is the
+usual explanation.
 
-- **Stepped width** — one width for the whole segment, taken from the pressure at its far end.
-  Width therefore changes in a step at every sample rather than along the segment, and the edge of
-  a stroke is a staircase. At tablet report rates that is everywhere. *This is what naive canvas
-  code does, and it is here to be looked at rather than used.*
-- **Taper (straight)** — the segment is the region swept between two circles, one at each sample,
-  so the width ramps continuously. Consecutive segments share an endpoint **and** a width, so the
-  ramp is continuous across the whole stroke. The path itself is still a chord from each sample to
-  the next. *Use this to see where the samples actually are:* on anything drawn quickly the corners
-  between chords are plainly visible, and you can count the report rate off them.
-- **Taper (curved)** — the same taper, with a cubic fitted through the samples instead of chords.
-  The corners go away. *Use this to see how much of a stroke's shape is interpolation rather than
-  measurement.*
+- **Around 125** — normal for a mouse.
+- **130 to 250** — normal for a drawing tablet.
+- **Much lower, or jumping about** — that is worth investigating. A tablet reporting 25 times a
+  second cannot describe a smooth curve however good the software is, and a rate that collapses
+  while you draw usually means something is interfering: a busy machine, a driver problem, or a
+  cable or wireless link that is struggling.
+- **`n/a`** — this browser cannot report it. Chrome, Edge and Firefox can; Safari only from
+  **18.2**.
 
-The difference between the two taper options is entirely about the path, and it grows with the gap
-between samples: a slow stroke on a high-reporting tablet looks the same either way, and a fast one
-on a slow tablet does not.
+The app is built not to be the cause. It draws from every position your pen reports rather than the
+one per screen refresh a browser hands over by default, it fits a curve through them instead of
+joining them with straight lines, and the width of a stroke ramps smoothly between readings instead
+of stepping at each one. There are no settings for any of that, because there is no version of it
+you would want turned off.
 
-**A note on what Curved costs.** The tangent at a sample is computed from its neighbours, so the
-segment ending at a sample cannot be drawn until the next one arrives — the ink lags the pen by one
-sample, and the last segment is painted when the pen lifts. That is the price of the curve meeting
-its neighbours smoothly, and every application that fits curves to pen input pays it in some form.
-
-The curve fitting is Krita's, by way of the C# implementation in
-[PenDynamicsPaint](https://github.com/TheSevenPens/PenDynamicsPaint), and is kept close to that
-version on purpose so the two can be compared.
+**Slow strokes will still show some unevenness at the edges**, and that is not your tablet either.
+Positions arrive quantised to whole screen pixels, which is invisible at speed and noticeable when
+the samples land a pixel or two apart. Painting applications hide it by filtering the path and by
+giving their brushes a soft edge; this one shows you what arrived.
 
 ## OS & browser compatibility
 

@@ -23,13 +23,6 @@
                 <option value="pointer-only">Pointer only (no drawing)</option>
             </select>
         </span>
-        <span class="control-item" id="stroke-item">Stroke:
-            <select id="stroke" title="How the ink between two pen samples is drawn. Pressure to Size only.">
-                <option value="stepped">Stepped width</option>
-                <option value="taper-straight" selected>Taper (straight)</option>
-                <option value="taper-curved">Taper (curved)</option>
-            </select>
-        </span>
         <select id="export">
             <option value="" disabled selected>Export…</option>
             <option value="png">Save as PNG</option>
@@ -47,6 +40,9 @@
         <span class="info-item">Twist: <span id="val-twist" class="val">---</span></span>
         <span class="info-item">Eraser: <span id="val-eraser" class="val">---</span></span>
         <span class="info-item">Buttons: <span id="val-buttons" class="val">---</span></span>
+        <!-- The first thing to ask when a stroke looks segmented: a tablet reporting
+             25 times a second cannot draw a smooth curve however good the software. -->
+        <span class="info-item" title="How many positions your pen reports each second. A mouse is around 125; drawing tablets are typically 130 to 250. If a stroke looks segmented, this is the number to look at first.">Points/s: <span id="val-rate" class="val">---</span></span>
     </div>
 </div>
 

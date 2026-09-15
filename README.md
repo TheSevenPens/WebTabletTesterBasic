@@ -7,7 +7,9 @@ A simple web app for verifying that drawing tablets and pens are working, and fo
 ## Scope guard
 This is **NOT** a creative digital painting app. Keep the scope narrow: a canvas, the dropdowns that decide what is drawn, and a live readout of `PointerEvent` properties. Resist adding colors, brushes, undo, layers, etc. If you find yourself reaching for those features, you're probably building a different app.
 
-The test that has held so far: a feature earns its place if it makes something about the **pen or the browser's reporting of it** visible. Pressure driving width qualifies. The Stroke dropdown qualifies, because the gap between samples is a property of the hardware and the choice of interpolation is what makes it visible. A colour picker would not.
+The test that has held so far: a feature earns its place if it makes something about the **pen or the browser's reporting of it** visible. Pressure driving width qualifies, and so does the Points/s readout. A colour picker would not, and neither would a setting for how strokes are drawn.
+
+**Drawing quality is fixed, deliberately.** The app draws from every reported position, fits a curve through them, and ramps width between them. None of that is configurable, because none of it has a setting a visitor would want to change — and because the app's job is to answer "does my tablet work", which a badly drawn stroke gets wrong by making the hardware look at fault. Experiments with alternatives belong somewhere else, not behind a dropdown here.
 
 ## Live site
 <https://thesevenpens.github.io/WebTabletTesterBasic/>
@@ -18,7 +20,7 @@ The test that has held so far: a feature earns its place if it makes something a
 ## Project layout
 A single-page static site — no build step, no dependencies.
 
-- `index.html` — toolbar in two rows (controls on top: Clear, Mode, Stroke, Export, About; pen readouts underneath) and the fullscreen `<canvas>`; About dialog markup
+- `index.html` — toolbar in two rows (controls on top: Clear, Mode, Export, About; pen readouts underneath) and the fullscreen `<canvas>`; About dialog markup
 - `app.js` — Pointer Events wiring, canvas sizing (HiDPI-aware: backing store in screen pixels, context scaled so drawing code stays in CSS pixels), drawing (stepped and tapered segments, oval stamps), curve fitting, info display, About-dialog handler
 - `style.css` — toolbar layout; `touch-action: none` and `overscroll-behavior: none` on the canvas to suppress browser pan/zoom/pull-to-refresh while drawing; About-dialog styling
 - `USERMANUAL.md` — end-user documentation (linked from the README and the in-app About dialog)
@@ -30,10 +32,8 @@ Open `index.html` directly in a browser (`file://`). No webserver needed.
 There are no automated tests. Run each in the relevant **Mode** before pushing changes that touch drawing or pointer handling:
 
 - **Pressure to Size**: pen pressure varies stroke width; mouse draws a mid-width stroke (pressure 0.5)
-- **Stroke: Stepped width**: the edge of a stroke shows a visible staircase where pressure changes
-- **Stroke: Taper (straight)**: width ramps smoothly, and a quickly drawn arc shows corners where the chords meet
-- **Stroke: Taper (curved)**: the same stroke drawn again has no corners. The ink lags the pen by one sample, and the final segment appears when the pen lifts — a stroke must not end short of where the pen was raised
-- **Stroke** is disabled and dimmed in every mode except Pressure to Size
+- Strokes are smooth: width ramps between readings rather than stepping, and a quickly drawn arc has no visible corners. The ink lags the pen by one reading, and the final segment appears when the pen lifts — a stroke must not end short of where the pen was raised
+- **Points/s** shows a number while a real pointer is moving, returns to `---` within about half a second of it stopping, and reads `n/a` in a browser without `getCoalescedEvents()`. Events dispatched from script contribute nothing, so this cannot be checked by automation
 - **Tilt Azimuth to Brush rotation**: leaning the pen in different compass directions rotates the oval accordingly
 - **Tilt Altitude to Brush size**: upright pen produces a small circle; tilting the pen toward flat stretches the oval in the leaning direction
 - **Twist to Brush rotation**: rotating the pen barrel rotates the oval (only relevant on hardware that reports twist)
