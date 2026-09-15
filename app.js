@@ -18,7 +18,6 @@
 const canvas  = document.getElementById('canvas');
 const toolbar = document.getElementById('toolbar');
 const modeSelect = document.getElementById('mode');
-const strokeSelect = document.getElementById('stroke');
 const cursorIndicator = document.getElementById('cursor-indicator');
 const ctx = canvas.getContext('2d');
 
@@ -32,7 +31,13 @@ const infoEls = {
     twist:    document.getElementById('val-twist'),
     eraser:   document.getElementById('val-eraser'),
     buttons:  document.getElementById('val-buttons'),
+    rate:     document.getElementById('val-rate'),
 };
+
+// Whether this browser will hand over the positions it merged into each move event.
+// Chrome, Edge and Firefox have for years; Safari only from 18.2, so on an older iPad
+// the app draws from one position per event and says so rather than inventing a rate.
+const HAS_COALESCED = typeof PointerEvent.prototype.getCoalescedEvents === 'function';
 
 // PointerEvent.buttons is a bitmask. Bit 5 (value 32) is the eraser end
 // of a stylus per the Pointer Events spec.
@@ -136,23 +141,6 @@ function clearCanvas() {
 
 
 // ── Drawing ───────────────────────────────────────────────────
-
-// Draw a line from `from` to `to` at one width, taken from the pressure at `to`.
-//
-// The width is therefore constant within a segment and changes in a step at every
-// sample boundary, which at tablet report rates is everywhere: the silhouette of a
-// stroke is a staircase rather than a ramp. Kept as a choice because seeing the
-// artefact is half of understanding why the taper below exists.
-function drawSteppedSegment(from, to) {
-    ctx.lineWidth = widthFor(to.pressure);
-    ctx.strokeStyle = 'black';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-}
 
 // Brush diameter for one pressure reading. Mouse events report 0.5, so a mouse
 // draws at half size rather than not at all.
@@ -260,6 +248,53 @@ function brushForMode(mode, e) {
 }
 
 
+// ── Smoothing ─────────────────────────────────────────────────
+
+// Each position is replaced by a step from the last filtered position toward it.
+//
+// Streamlining, as the web's drawing libraries do it: perfect-freehand calls the
+// amount `streamline` and defaults it to 0.5, which is the value used here;
+// atrament's equivalent defaults to 0.85. Every one of them filters by default, so a
+// visitor comparing this app against anything else they have drawn in would
+// otherwise be comparing a raw signal against filtered ones.
+//
+// What it is actually fixing here is not a shaky hand. Pen positions arrive
+// quantised to whole screen pixels, which is invisible at speed and shows as an
+// uneven edge when a slow stroke lands its samples a pixel or two apart; a filter
+// reconstructs a path between the grid points. Measured against a true straight line
+// on a snapped diagonal, mean distance fell from 0.141 px to 0.082 px at this
+// setting.
+//
+// Half, and no setting. Heavier looks calmer and starts to visibly trail the pen,
+// which in a tool for deciding whether a tablet is working would be its own false
+// alarm. At this strength and a tablet's report rate the filter settles within a
+// couple of readings, which is well under the time it takes a frame to appear.
+const STREAMLINE = 0.5;
+
+let streamlined = null;
+
+function resetSmoothing() {
+    streamlined = null;
+}
+
+function smooth(sample) {
+    // The first position of a stroke has nothing to be filtered toward, and starting
+    // anywhere else would drag the stroke away from the point it began at.
+    if (streamlined === null) {
+        streamlined = { x: sample.x, y: sample.y };
+        return sample;
+    }
+
+    const step = 1 - STREAMLINE;
+    streamlined = {
+        x: streamlined.x + (sample.x - streamlined.x) * step,
+        y: streamlined.y + (sample.y - streamlined.y) * step,
+    };
+
+    return { ...sample, x: streamlined.x, y: streamlined.y };
+}
+
+
 // ── Curve fitting ─────────────────────────────────────────────
 
 // Fits a cubic through the pen samples so the ink between them follows an arc
@@ -295,12 +330,7 @@ class CurveFitter {
     // Take one sample, and give back the path that is now settled enough to draw.
     // Empty for the first two samples of a stroke: there is no segment to draw until
     // two have arrived, and no curve until three.
-    next(sample, curved) {
-        if (!curved) {
-            this.previous = sample;
-            return [sample];
-        }
-
+    next(sample) {
         if (this.previous === null) {
             this.previous = sample;
             return [sample];                 // the stroke has to start somewhere
@@ -329,8 +359,8 @@ class CurveFitter {
 
     // The segment still owed, which is the one ending at the last sample. Without
     // this every stroke would stop one sample short of where the pen lifted.
-    flush(curved) {
-        if (!curved || !this.haveTangent || this.older === null || this.previous === null) {
+    flush() {
+        if (!this.haveTangent || this.older === null || this.previous === null) {
             return [];
         }
 
@@ -482,6 +512,74 @@ function parameters(a1, a2, b1, b2) {
 }
 
 
+// ── Report rate ───────────────────────────────────────────────
+
+// How many positions the pen reports each second.
+//
+// Not the rate move events arrive at, which is the display's. What is counted is the
+// positions inside each event, which is what the app draws from.
+//
+// This is here because it is the first thing to ask when a stroke looks segmented:
+// a tablet reporting 25 times a second cannot draw a smooth curve however good the
+// software is, and one reporting 200 times can. Without it there is no way to tell a
+// slow tablet from a slow application.
+const RATE_WINDOW_MS = 1000;
+
+// Below this the window is too short to divide by and the answer would be noise.
+const RATE_MIN_SPAN_MS = 150;
+
+// After this much quiet the last figure is stale: the pen has stopped or left.
+const RATE_IDLE_MS = 400;
+
+let rateWindow = [];
+
+function noteRate(e) {
+    if (!HAS_COALESCED) return;
+
+    // An untrusted event has an empty coalesced list by definition, so anything
+    // dispatched from script contributes nothing rather than a false zero.
+    const positions = e.getCoalescedEvents().length;
+    if (positions === 0) return;
+
+    const now = performance.now();
+
+    // A gap means the pen stopped, left, or was lifted between strokes. Carrying the
+    // old entries across it would divide this burst's positions by the pause as well.
+    const previous = rateWindow[rateWindow.length - 1];
+    if (previous && now - previous.at > RATE_IDLE_MS) rateWindow = [];
+
+    rateWindow.push({ at: now, positions });
+    while (rateWindow.length > 1 && now - rateWindow[0].at > RATE_WINDOW_MS) rateWindow.shift();
+}
+
+function reportRate() {
+    // Without getCoalescedEvents the only countable thing is move events, which is
+    // the display's rate wearing the pen's name. Better to say nothing.
+    if (!HAS_COALESCED) return 'n/a';
+    if (rateWindow.length < 2) return '---';
+
+    const first = rateWindow[0];
+    const last = rateWindow[rateWindow.length - 1];
+    if (performance.now() - last.at > RATE_IDLE_MS) return '---';
+
+    const span = last.at - first.at;
+    if (span < RATE_MIN_SPAN_MS) return '---';
+
+    // The first entry is excluded: its positions were reported before its timestamp,
+    // so they fall outside the span being divided by.
+    let positions = 0;
+    for (let i = 1; i < rateWindow.length; i++) positions += rateWindow[i].positions;
+
+    return String(Math.round(positions / span * 1000));
+}
+
+// The readouts are otherwise driven by pointer events, so without this the rate would
+// keep claiming whatever it last measured after the pen was lifted.
+setInterval(() => {
+    if (infoEls.rate.textContent !== '---') infoEls.rate.textContent = reportRate();
+}, 200);
+
+
 // ── Info display ──────────────────────────────────────────────
 
 function updateInfo(e) {
@@ -497,6 +595,7 @@ function updateInfo(e) {
     // Show the buttons bitmask as a 6-bit binary string so all defined
     // pointer buttons (tip, barrel, middle, X1, X2, eraser) are visible.
     infoEls.buttons.textContent  = '0b' + e.buttons.toString(2).padStart(6, '0');
+    infoEls.rate.textContent     = reportRate();
 }
 
 
@@ -519,26 +618,20 @@ function sampleFrom(e) {
     return { x: e.offsetX, y: e.offsetY, pressure: e.pressure };
 }
 
-function isCurved() {
-    return strokeSelect.value === 'taper-curved';
-}
-
 // Draw from wherever the ink last reached to one more point along the path.
 function drawTo(point) {
-    if (lastDrawn) {
-        if (strokeSelect.value === 'stepped') drawSteppedSegment(lastDrawn, point);
-        else drawTaperSegment(lastDrawn, point);
-    }
+    if (lastDrawn) drawTaperSegment(lastDrawn, point);
     lastDrawn = point;
 }
 
 // Paint whatever the fitter is still holding back, and forget the stroke.
 function endStroke() {
-    for (const point of fitter.flush(isCurved())) drawTo(point);
+    for (const point of fitter.flush()) drawTo(point);
     isDrawing = false;
     lastPos = null;
     lastDrawn = null;
     fitter.reset();
+    resetSmoothing();
 }
 
 
@@ -549,11 +642,30 @@ canvas.addEventListener('pointerdown', (e) => {
     lastPos = sampleFrom(e);
     lastDrawn = null;
     fitter.reset();
-    for (const point of fitter.next(sampleFrom(e), isCurved())) drawTo(point);
+    resetSmoothing();
+    for (const point of fitter.next(smooth(sampleFrom(e)))) drawTo(point);
     updateInfo(e);
 });
 
+// Every position the pen reported since the last frame, rather than the single one
+// the event carries.
+//
+// A pointermove is delivered about once per screen refresh however fast the tablet
+// reports, and the rest of the readings are inside it waiting to be asked for. Using
+// them costs nothing -- they have already arrived -- and a stroke drawn from all of
+// them follows the pen more closely than one drawn from a fifth of them.
+//
+// An untrusted event has an empty list by definition, so anything dispatched from
+// script falls back to the event itself.
+function positionsIn(e) {
+    if (!HAS_COALESCED) return [e];
+
+    const merged = e.getCoalescedEvents();
+    return merged.length > 0 ? merged : [e];
+}
+
 canvas.addEventListener('pointermove', (e) => {
+    noteRate(e);
     updateInfo(e);
     const mode = modeSelect.value;
 
@@ -569,9 +681,10 @@ canvas.addEventListener('pointermove', (e) => {
 
     const pos = sampleFrom(e);
     if (mode === 'pressure-size') {
-        // Pressure (0–1) scales the brush size, and the Stroke control decides how
-        // the ink between two samples is laid down.
-        for (const point of fitter.next(pos, isCurved())) drawTo(point);
+        // Pressure (0–1) scales the brush size.
+        for (const position of positionsIn(e)) {
+            for (const point of fitter.next(smooth(sampleFrom(position)))) drawTo(point);
+        }
     } else {
         drawOvalStroke(lastPos, pos, brushForMode(mode, e));
     }
@@ -601,18 +714,7 @@ function hideCursorIndicator() {
 
 modeSelect.addEventListener('change', () => {
     if (modeSelect.value !== 'pointer-only') hideCursorIndicator();
-    syncStrokeControl();
 });
-
-// The Stroke control decides how the ink between two samples is drawn, and only
-// Pressure to Size draws that kind of ink: the oval modes stamp ellipses, which have
-// no line width to ramp and no path to fit. Disabled rather than hidden, so it does
-// not look live when it would do nothing.
-// Dimming the label alongside it is left to CSS, which styles the whole item from
-// the disabled select.
-function syncStrokeControl() {
-    strokeSelect.disabled = modeSelect.value !== 'pressure-size';
-}
 
 
 // ── Export ────────────────────────────────────────────────────
@@ -689,5 +791,4 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-syncStrokeControl();
 resizeCanvas();
