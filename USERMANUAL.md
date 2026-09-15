@@ -69,14 +69,20 @@ usual explanation.
 
 The app is built not to be the cause. It draws from every position your pen reports rather than the
 one per screen refresh a browser hands over by default, it fits a curve through them instead of
-joining them with straight lines, and the width of a stroke ramps smoothly between readings instead
-of stepping at each one. There are no settings for any of that, because there is no version of it
-you would want turned off.
+joining them with straight lines, the width of a stroke ramps smoothly between readings instead of
+stepping at each one, and the path is lightly filtered on its way in. There are no settings for any
+of that, because there is no version of it you would want turned off.
 
-**Slow strokes will still show some unevenness at the edges**, and that is not your tablet either.
-Positions arrive quantised to whole screen pixels, which is invisible at speed and noticeable when
-the samples land a pixel or two apart. Painting applications hide it by filtering the path and by
-giving their brushes a soft edge; this one shows you what arrived.
+**The filtering is worth a word**, because it is the one thing here that is not simply showing you
+what arrived. Pen positions reach a web page snapped to whole screen pixels — invisible at speed,
+and the reason a slowly drawn stroke has a slightly uneven edge, since its readings land only a
+pixel or two apart. The filter reconstructs a path between those points. It is light: the same
+strength [perfect-freehand](https://github.com/steveruizok/perfect-freehand) uses by default, which
+puts the ink one reading behind the pen — around 6 ms on a tablet reporting 180 times a second.
+Every drawing application on the web does this, most of them far more heavily.
+
+A slow stroke may still look a little uneven. That is the quantisation showing through, not your
+tablet.
 
 ## OS & browser compatibility
 

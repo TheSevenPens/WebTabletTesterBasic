@@ -9,7 +9,7 @@ This is **NOT** a creative digital painting app. Keep the scope narrow: a canvas
 
 The test that has held so far: a feature earns its place if it makes something about the **pen or the browser's reporting of it** visible. Pressure driving width qualifies, and so does the Points/s readout. A colour picker would not, and neither would a setting for how strokes are drawn.
 
-**Drawing quality is fixed, deliberately.** The app draws from every reported position, fits a curve through them, and ramps width between them. None of that is configurable, because none of it has a setting a visitor would want to change — and because the app's job is to answer "does my tablet work", which a badly drawn stroke gets wrong by making the hardware look at fault.
+**Drawing quality is fixed, deliberately.** The app draws from every reported position, fits a curve through them, ramps width between them, and lightly filters the path on its way in. None of that is configurable, because none of it has a setting a visitor would want to change — and because the app's job is to answer "does my tablet work", which a badly drawn stroke gets wrong by making the hardware look at fault.
 
 Experiments with alternatives belong in [WebStrokeExperimentLab](https://github.com/TheSevenPens/WebStrokeExperimentLab), which has a control for every stage of drawing so any two can be compared. That is where the way this app draws was worked out, and where the next change to it should be tried first. Anything that proves worth having comes back here as fixed behaviour with no setting attached.
 
@@ -34,7 +34,8 @@ Open `index.html` directly in a browser (`file://`). No webserver needed.
 There are no automated tests. Run each in the relevant **Mode** before pushing changes that touch drawing or pointer handling:
 
 - **Pressure to Size**: pen pressure varies stroke width; mouse draws a mid-width stroke (pressure 0.5)
-- Strokes are smooth: width ramps between readings rather than stepping, and a quickly drawn arc has no visible corners. The ink lags the pen by one reading, and the final segment appears when the pen lifts — a stroke must not end short of where the pen was raised
+- Strokes are smooth: width ramps between readings rather than stepping, and a quickly drawn arc has no visible corners. A slowly drawn one is reasonably even, though not perfectly — that residue is quantisation, not a regression
+- A stroke begins exactly where the pen touched down. The filter must not drag the first point toward anywhere else The ink lags the pen by one reading, and the final segment appears when the pen lifts — a stroke must not end short of where the pen was raised
 - **Points/s** shows a number while a real pointer is moving, returns to `---` within about half a second of it stopping, and reads `n/a` in a browser without `getCoalescedEvents()`. Events dispatched from script contribute nothing, so this cannot be checked by automation
 - **Tilt Azimuth to Brush rotation**: leaning the pen in different compass directions rotates the oval accordingly
 - **Tilt Altitude to Brush size**: upright pen produces a small circle; tilting the pen toward flat stretches the oval in the leaning direction
