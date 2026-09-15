@@ -46,21 +46,45 @@ body {
     font-family: "Consolas", "Courier New", monospace;
     color: #000;
     /* These change many times a second while drawing. Fixed-width digits and a
-       floor on the width keep the row from twitching as the numbers change. */
+       floor on the width keep the row from twitching as the numbers change.
+
+       Each floor below is the longest string that cell can actually hold, because
+       anything narrower moves the toolbar rather than just the number. Five cells
+       were reserved 5ch while their widest real values need 6: at a 930px window,
+       tilting the pen to -60 degrees widened four cells by 7px each, wrapped the
+       readouts onto a second row, and pushed the canvas 21px below the bottom of
+       the window -- during a stroke, which also moves the drawing surface under
+       the pen that is drawing on it. */
     font-variant-numeric: tabular-nums;
     display: inline-block;
     min-width: 5ch;
 }
 
-#val-type,
-#val-eraser {
-    min-width: 4ch;
+/* "mouse", "touch" */
+#val-type {
+    min-width: 5ch;
 }
 
+/* "-60.0°", "360.0°", "359.0°" */
+#val-tiltX,
+#val-tiltY,
+#val-azimuth,
+#val-altitude,
+#val-twist {
+    min-width: 6ch;
+}
+
+/* "yes" */
+#val-eraser {
+    min-width: 3ch;
+}
+
+/* "0b100001" */
 #val-buttons {
     min-width: 8ch;
 }
 
+/* "n/a", and four digits of rate */
 #val-rate {
     min-width: 4ch;
 }

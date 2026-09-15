@@ -587,8 +587,21 @@ const RATE_IDLE_MS = 400;
 
 let rateWindow = [];
 
+// Which pointer the window is measuring. A second device is a second rate.
+let ratePointer = null;
+
 function noteRate(e) {
     if (!HAS_COALESCED) return;
+
+    // A different pointer means a different device reporting at its own speed, and
+    // Type shows only the latest one, so the figure would be labelled with a device
+    // that did not produce most of it. Measured: one pen sample, a ten-sample mouse
+    // burst and one more pen sample across 200 ms read 50 points/s, where the same
+    // pen traffic on its own reads 9.
+    if (ratePointer !== e.pointerId) {
+        rateWindow = [];
+        ratePointer = e.pointerId;
+    }
 
     // An untrusted event has an empty coalesced list by definition, so anything
     // dispatched from script contributes nothing rather than a false zero.
@@ -716,6 +729,20 @@ let lastPressure = 0;
 
 const fitter = new CurveFitter();
 
+// Which pointer the stroke in progress belongs to, or null when nothing is drawing.
+//
+// A tablet reports a palm resting on the glass as a second contact, and a second
+// contact used to be written straight into the same stroke: a pen drawing at (120,100)
+// with a touch arriving at (500,300) painted a 400-pixel streak between them, and the
+// palm lifting ended the pen's stroke. Both look like the tablet misbehaving.
+let activePointerId = null;
+
+// Whether an event concerns the stroke in progress. Anything is welcome when no stroke
+// is running -- that is hovering, and the readouts should follow it.
+function ownsStroke(e) {
+    return activePointerId === null || e.pointerId === activePointerId;
+}
+
 // Whether the pen, mouse or finger is actually touching.
 //
 // Not the same question as "did a pointerdown arrive". A pen's barrel button sends one
@@ -730,6 +757,10 @@ function isContact(e) {
 // more places than a pointerup: a release, the pointer leaving, a cancellation, Clear,
 // a change of mode, and a resize.
 function resetStroke() {
+    if (activePointerId !== null && canvas.hasPointerCapture?.(activePointerId)) {
+        canvas.releasePointerCapture(activePointerId);
+    }
+    activePointerId = null;
     isDrawing = false;
     lastPos = null;
     lastDrawn = null;
@@ -786,6 +817,10 @@ function endStroke(e) {
 // ── Pointer event handlers ────────────────────────────────────
 
 canvas.addEventListener('pointerdown', (e) => {
+    // A contact arriving while another is already drawing is a palm, a second finger,
+    // or a mouse someone nudged. The stroke keeps the pointer it started with.
+    if (!ownsStroke(e)) return;
+
     updateInfo(e);
 
     const mode = modeSelect.value;
@@ -796,6 +831,18 @@ canvas.addEventListener('pointerdown', (e) => {
 
     resetStroke();
     isDrawing = true;
+    activePointerId = e.pointerId;
+
+    // Capture keeps this pointer's events coming to the canvas even when it moves over
+    // the toolbar, which is otherwise a pointerleave: crossing into the toolbar and
+    // back with the tip still down left the stroke dead until the next press. Ink
+    // outside the canvas is clipped by the bitmap, as it always was.
+    try {
+        canvas.setPointerCapture(e.pointerId);
+    } catch {
+        // No capture available. The stroke still works; it just ends at the edge.
+    }
+
     lastPos = sampleFrom(e);
     beginStroke(e, mode);
 });
@@ -818,6 +865,10 @@ function positionsIn(e) {
 }
 
 canvas.addEventListener('pointermove', (e) => {
+    // Before the readouts, not just before the drawing: a palm's pressure and tilt
+    // shown in place of the pen's is the same fault wearing different clothes.
+    if (!ownsStroke(e)) return;
+
     noteRate(e);
     updateInfo(e);
     const mode = modeSelect.value;
@@ -839,20 +890,29 @@ canvas.addEventListener('pointermove', (e) => {
         return;
     }
 
-    const pos = sampleFrom(e);
-    if (mode === 'pressure-size') {
-        // Pressure (0–1) scales the brush size.
-        for (const position of positionsIn(e)) {
-            for (const point of fitter.next(smooth(sampleFrom(position)))) drawTo(point);
-        }
-    } else {
-        drawOvalStroke(lastPos, pos, brushForMode(mode, e));
-    }
+    // Every mode draws from the same stream of positions, each with the pressure and
+    // the angles it was reported with. The oval modes used to take the outermost event
+    // alone and span straight to it: a batch bending through (150,200) on its way from
+    // (100,100) to (200,100) drew a flat bar 7px tall with the corner discarded --
+    // while Points/s counted every one of those positions as one the stroke was built
+    // from.
+    for (const position of positionsIn(e)) {
+        const at = sampleFrom(position);
 
-    lastPos = pos;
+        if (mode === 'pressure-size') {
+            // Pressure (0–1) scales the brush size.
+            for (const point of fitter.next(smooth(at))) drawTo(point);
+        } else {
+            drawOvalStroke(lastPos, at, brushForMode(mode, position));
+        }
+
+        lastPos = at;
+    }
 });
 
 canvas.addEventListener('pointerup', (e) => {
+    if (!ownsStroke(e)) return;
+
     endStroke(e);
 
     // After the release, not before: the panel should report a released pen rather than
@@ -861,11 +921,21 @@ canvas.addEventListener('pointerup', (e) => {
 });
 
 canvas.addEventListener('pointercancel', (e) => {
+    if (!ownsStroke(e)) return;
+
     endStroke(e);
     updateInfo(e);
 });
 
+// Capture can be taken away rather than given up -- the element going away, or the
+// browser deciding. However it went, the stroke has no owner any more.
+canvas.addEventListener('lostpointercapture', (e) => {
+    if (isDrawing && e.pointerId === activePointerId) endStroke(e);
+});
+
 canvas.addEventListener('pointerleave', (e) => {
+    if (!ownsStroke(e)) return;
+
     endStroke(e);
     hideCursorIndicator();
 
@@ -949,6 +1019,10 @@ window.addEventListener('resize', scheduleResize);
 // factor — which the window resize event alone can miss.
 const resizeObserver = new ResizeObserver((entries) => {
     for (const entry of entries) {
+        // Only the canvas has a device-pixel box worth keeping. The toolbar is observed
+        // for its height alone, and its box would be the wrong one to size ink by.
+        if (entry.target !== canvas) continue;
+
         const box = entry.devicePixelContentBoxSize?.[0];
         if (box) devicePixelBox = { width: box.inlineSize, height: box.blockSize };
     }
@@ -961,6 +1035,14 @@ try {
     // devicePixelRatio in backingSize().
     resizeObserver.observe(canvas);
 }
+
+// The canvas takes whatever height the window has left after the toolbar, so a toolbar
+// that changes height has to resize it. Nothing else notices: the canvas keeps the CSS
+// height it was last given, so its own box does not change and neither does the
+// window's, and the bottom of the canvas ends up below the bottom of the screen.
+// Reserving the readout widths is what stops that happening while someone is drawing;
+// this is what keeps the canvas honest when the toolbar wraps for any other reason.
+resizeObserver.observe(toolbar);
 
 // Delete or Backspace clears the canvas
 document.addEventListener('keydown', (e) => {
