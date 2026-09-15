@@ -27,6 +27,7 @@ moving under the pointer as values change width.
 | **Clear** | Wipes the canvas. |
 | **Export…** | Save the current canvas as a PNG file, or copy it to the clipboard as an image (paste into chat, an image editor, etc.). The image is captured at your display's full pixel resolution, so stroke detail survives zooming in. Useful for sharing what your pen is producing when reporting a driver issue. |
 | **Mode** | Picks which pen input drives the brush — see below. |
+| **Fixed pressure** | Draw as though the pen were held at a constant half pressure. The Pressure readout still shows what the pen reports; only the stroke ignores it. Pressure to Size only. |
 | **Use all pen points** | Draw from every position the pen reported, instead of the one per screen refresh a browser hands over on its own — see [Report rate](#report-rate). Pressure to Size only, and only where the browser can supply them. |
 | **Stroke** | How the ink between two pen samples is drawn — see [Stroke rendering](#stroke-rendering). Only **Pressure to Size** draws that kind of ink, so the control is disabled in the other modes. |
 | **Type** | `pen`, `mouse`, or `touch` — what the browser thinks the input device is. |
@@ -159,6 +160,24 @@ sits on a fraction of a pixel. Subtracting it would make the position fractional
 reported a whole number, and this readout would then be answering a question about the page layout
 while appearing to answer one about your hardware. Strokes are still drawn from the canvas-relative
 position; it carries exactly the same precision.
+
+## Taking pressure out of the picture
+
+**Fixed pressure** holds the brush at one width for the whole stroke, so nothing the pen says about
+pressure reaches the ink. Position becomes the only thing that can vary.
+
+It is a way of splitting a question in two. If a stroke looks rough and you want to know why, draw
+it again with this ticked:
+
+- **Still rough** — the roughness is in the *path*. Hand tremor, or the positions the pen is
+  reporting.
+- **Now smooth** — the roughness was in the *pressure*. Small changes between one reading and the
+  next become changes in width, and a wide brush magnifies them: width is pressure times the
+  maximum brush size, so a 1% wobble on a 50-pixel brush is half a pixel of edge, every sample.
+
+The Pressure readout is deliberately left alone while this is on. It reports the pen, not the
+brush, and it would be a poor readout that lied about its instrument because a drawing setting
+changed.
 
 ## OS & browser compatibility
 

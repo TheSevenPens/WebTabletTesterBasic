@@ -33,7 +33,8 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - **Stroke: Stepped width**: the edge of a stroke shows a visible staircase where pressure changes
 - **Stroke: Taper (straight)**: width ramps smoothly, and a quickly drawn arc shows corners where the chords meet
 - **Stroke: Taper (curved)**: the same stroke drawn again has no corners. The ink lags the pen by one sample, and the final segment appears when the pen lifts — a stroke must not end short of where the pen was raised
-- **Stroke** is disabled and dimmed in every mode except Pressure to Size
+- **Stroke**, **Fixed pressure** and **Use all pen points** are disabled and dimmed in every mode except Pressure to Size
+- **Fixed pressure**: stroke width stops responding to the pen while the Pressure readout keeps reporting it
 - **Use all pen points**: with it ticked, **used** rises to meet **pen** while drawing and the stroke follows a fast hand more closely; with it clear, **used** sits near the refresh rate. Disabled in the oval modes and in any browser without `getCoalescedEvents()`
 - **Tilt Azimuth to Brush rotation**: leaning the pen in different compass directions rotates the oval accordingly
 - **Tilt Altitude to Brush size**: upright pen produces a small circle; tilting the pen toward flat stretches the oval in the leaning direction

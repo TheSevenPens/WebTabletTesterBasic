@@ -20,6 +20,11 @@ const toolbar = document.getElementById('toolbar');
 const modeSelect = document.getElementById('mode');
 const strokeSelect = document.getElementById('stroke');
 const allPointsCheck = document.getElementById('allpoints');
+const fixedPressureCheck = document.getElementById('fixedpressure');
+
+/// Pressure to draw at when the pen's own is being ignored. Half, so the brush is
+/// mid-width and a stroke has room to look thicker or thinner than it.
+const FIXED_PRESSURE = 0.5;
 const cursorIndicator = document.getElementById('cursor-indicator');
 const ctx = canvas.getContext('2d');
 
@@ -640,8 +645,16 @@ let lastDrawn = null;
 
 const fitter = new CurveFitter();
 
+// What the stroke is drawn from. Not what the pen said: with Fixed pressure ticked
+// the width is held constant, which takes pressure out of the picture entirely and
+// leaves position as the only thing that can vary. The Pressure readout is
+// untouched and still reports what the pen actually sent.
 function sampleFrom(e) {
-    return { x: e.offsetX, y: e.offsetY, pressure: e.pressure };
+    return {
+        x: e.offsetX,
+        y: e.offsetY,
+        pressure: fixedPressureCheck.checked ? FIXED_PRESSURE : e.pressure,
+    };
 }
 
 function isCurved() {
@@ -754,6 +767,9 @@ function syncStrokeControl() {
     // Nothing to use in a browser that will not hand the extra samples over, and
     // nowhere to put them in a mode that stamps ovals.
     allPointsCheck.disabled = !drawsStrokes || !HAS_COALESCED;
+
+    // Only one mode lets pressure near the brush, so only one mode can ignore it.
+    fixedPressureCheck.disabled = !drawsStrokes;
 }
 
 function usingAllPoints() {
