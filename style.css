@@ -89,12 +89,6 @@ body {
     min-width: 4ch;
 }
 
-/* A control that does not apply to the current mode. Dimmed here rather than in
-   script, so the reason lives with the rest of the appearance. */
-.control-item:has(select:disabled) {
-    opacity: 0.5;
-}
-
 #export {
     margin-left: auto; /* push Export (and the About button after it) to far right */
 }

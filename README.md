@@ -23,7 +23,7 @@ Experiments with alternatives belong in [WebStrokeExperimentLab](https://github.
 A single-page static site — no build step, no dependencies.
 
 - `index.html` — toolbar in two rows (controls on top: Clear, Mode, Export, About; pen readouts underneath) and the fullscreen `<canvas>`; About dialog markup
-- `app.js` — Pointer Events wiring, canvas sizing (HiDPI-aware: backing store in screen pixels, context scaled so drawing code stays in CSS pixels), drawing (stepped and tapered segments, oval stamps), curve fitting, info display, About-dialog handler
+- `app.js` — Pointer Events wiring, canvas sizing (HiDPI-aware: backing store in screen pixels, context scaled so drawing code stays in CSS pixels), drawing (tapered segments, oval stamps), curve fitting, info display, About-dialog handler
 - `style.css` — toolbar layout; `touch-action: none` and `overscroll-behavior: none` on the canvas to suppress browser pan/zoom/pull-to-refresh while drawing; About-dialog styling
 - `USERMANUAL.md` — end-user documentation (linked from the README and the in-app About dialog)
 
@@ -58,7 +58,8 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - Delete / Backspace clears the canvas; the Clear button clears the canvas
 - Window resize re-fits and clears the canvas
 - **HiDPI rendering**: on a display with `devicePixelRatio` > 1, stroke edges are crisp rather than blocky. Browser zoom (Ctrl +/-) and dragging the window to a monitor with a different scale factor both re-size the backing store and keep strokes crisp
-- Right-click does not open a context menu
+- Right-click does not open a context menu over the canvas, and does open one everywhere else, including on the About dialog's links
+- Delete and Backspace clear the canvas, but not while the About dialog is open and not while a dropdown has the focus
 - About button opens the dialog; Esc and the dialog's Close button both dismiss it
 - Export → Save as PNG downloads a `tablet-tester.png` file matching what's on the canvas, at the display's full pixel resolution (on a 2x display a 1200x800 window exports a 2400x1600 image)
 - Export → Copy to clipboard pastes as an image into another app (needs a browser with async `ClipboardItem` support)

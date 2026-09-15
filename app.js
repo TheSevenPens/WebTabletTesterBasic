@@ -329,8 +329,8 @@ function smooth(sample) {
 // version deliberately, so the two can be compared.
 //
 // Without it a stroke is a polygon. A pointermove arrives about once a frame, so on
-// anything drawn quickly the samples are far apart and the corners between them are
-// plainly visible — which is exactly what the Straight option shows.
+// anything drawn quickly the samples are far apart, and joining them with straight
+// spans leaves a visible corner at every one.
 //
 // It lags one sample. The tangent at a sample is the central difference through its
 // neighbours, so the segment ending at a sample cannot be drawn until the next one
@@ -489,8 +489,18 @@ function fitCubic(from, to, tangentFrom, tangentTo) {
     return points;
 }
 
-// Enough pieces that none is longer than FLATTENING_STEP. Measured on the control
-// polygon, which is never shorter than the curve, so this errs toward more pieces.
+// Roughly one piece per FLATTENING_STEP of curve, measured on the control polygon,
+// which is never shorter than the curve itself.
+//
+// Roughly, not exactly: the pieces are cut at equal steps of t, and equal steps of t
+// are not equal lengths. Where both handles bunch at one end the curve covers most of
+// its length in a fraction of the parameter, and the longest piece is several times
+// the step -- control points (0,0), (0,0), (0,0), (100,0) give one of 2.97px at 100
+// pieces. The 200-piece cap loosens it further on a long curve.
+//
+// It does not leave gaps, whatever the spacing: consecutive points are joined by a
+// filled taper rather than stamped, so a longer piece draws a longer segment of the
+// same ribbon. The step is what keeps the ribbon's edge from visibly faceting.
 function pieceCount(p1, c1, c2, p2) {
     const polygon = length({ x: c1.x - p1.x, y: c1.y - p1.y })
                   + length({ x: c2.x - c1.x, y: c2.y - c1.y })
@@ -1044,12 +1054,29 @@ try {
 // this is what keeps the canvas honest when the toolbar wraps for any other reason.
 resizeObserver.observe(toolbar);
 
-// Delete or Backspace clears the canvas
+// Delete or Backspace clears the canvas -- unless the key is meant for something else.
+//
+// It was bound on the document with no conditions, so Backspace with the About dialog
+// open wiped the drawing behind it (16,399 px of ink to none), and so did Delete while
+// the Mode dropdown had the focus. Both keys have their own meaning in a control, and a
+// dialog owns the keyboard while it is open.
+//
+// A focused button is deliberately not excluded: it has no use for either key, and
+// excluding it would stop the shortcut working right after a click on Clear or About.
+const KEYS_MEAN_SOMETHING_ELSE = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
+
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault();
-        clearCanvas();
-    }
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    if (document.querySelector('dialog[open]')) return;
+    if (document.activeElement?.matches(KEYS_MEAN_SOMETHING_ELSE)) return;
+
+    e.preventDefault();
+    clearCanvas();
 });
+
+// A pen's barrel button raises the context menu, which over the canvas means it appears
+// in the middle of a stroke. Suppressed there and nowhere else: on the rest of the page,
+// including the About dialog's links, right-click should do what it always does.
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 resizeCanvas();
