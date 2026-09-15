@@ -18,11 +18,16 @@ It is **not** a drawing app — there are no colors, brushes, layers, or save/ex
 
 ## Toolbar reference
 
+The toolbar has two rows: what you set on top, and what the pen reports underneath. The readouts
+change many times a second while you draw, so keeping them on their own row stops the controls
+moving under the pointer as values change width.
+
 | Control | What it shows / does |
 | --- | --- |
 | **Clear** | Wipes the canvas. |
 | **Export…** | Save the current canvas as a PNG file, or copy it to the clipboard as an image (paste into chat, an image editor, etc.). The image is captured at your display's full pixel resolution, so stroke detail survives zooming in. Useful for sharing what your pen is producing when reporting a driver issue. |
 | **Mode** | Picks which pen input drives the brush — see below. |
+| **Stroke** | How the ink between two pen samples is drawn — see [Stroke rendering](#stroke-rendering). Only **Pressure to Size** draws that kind of ink, so the control is disabled in the other modes. |
 | **Type** | `pen`, `mouse`, or `touch` — what the browser thinks the input device is. |
 | **Pressure** | 0.000 – 1.000. Mouse always reports `0.5`. |
 | **Tilt X** | -90° to 90°. Left/right tilt of the pen. |
@@ -47,6 +52,38 @@ The **Mode** dropdown selects which pen property drives the brush. Each mode is 
 - **Pointer only (no drawing)** — Shows a red crosshair that follows the reported pointer position, with no strokes left behind. The crosshair stays visible even while the pen is pressing down (when the OS would normally hide the system cursor). *Use this to check pointer tracking accuracy and latency, or to confirm the browser is receiving events at all, without cluttering the canvas.*
 
 The rotation modes deliberately use a very elongated oval so that small changes in the driving angle are visible.
+
+## Stroke rendering
+
+A pen reports samples, not a stroke. The **Stroke** dropdown picks what is drawn *between* two
+samples, which is where a surprising amount of what a stroke looks like is decided. It applies to
+**Pressure to Size**; the oval modes stamp ellipses and have no line width to ramp or path to fit.
+
+- **Stepped width** — one width for the whole segment, taken from the pressure at its far end.
+  Width therefore changes in a step at every sample rather than along the segment, and the edge of
+  a stroke is a staircase. At tablet report rates that is everywhere. *This is what naive canvas
+  code does, and it is here to be looked at rather than used.*
+- **Taper (straight)** — the segment is the region swept between two circles, one at each sample,
+  so the width ramps continuously. Consecutive segments share an endpoint **and** a width, so the
+  ramp is continuous across the whole stroke. The path itself is still a chord from each sample to
+  the next. *Use this to see where the samples actually are:* on anything drawn quickly the corners
+  between chords are plainly visible, and you can count the report rate off them.
+- **Taper (curved)** — the same taper, with a cubic fitted through the samples instead of chords.
+  The corners go away. *Use this to see how much of a stroke's shape is interpolation rather than
+  measurement.*
+
+The difference between the two taper options is entirely about the path, and it grows with the gap
+between samples: a slow stroke on a high-reporting tablet looks the same either way, and a fast one
+on a slow tablet does not.
+
+**A note on what Curved costs.** The tangent at a sample is computed from its neighbours, so the
+segment ending at a sample cannot be drawn until the next one arrives — the ink lags the pen by one
+sample, and the last segment is painted when the pen lifts. That is the price of the curve meeting
+its neighbours smoothly, and every application that fits curves to pen input pays it in some form.
+
+The curve fitting is Krita's, by way of the C# implementation in
+[PenDynamicsPaint](https://github.com/TheSevenPens/PenDynamicsPaint), and is kept close to that
+version on purpose so the two can be compared.
 
 ## OS & browser compatibility
 

@@ -18,6 +18,7 @@
 const canvas  = document.getElementById('canvas');
 const toolbar = document.getElementById('toolbar');
 const modeSelect = document.getElementById('mode');
+const strokeSelect = document.getElementById('stroke');
 const cursorIndicator = document.getElementById('cursor-indicator');
 const ctx = canvas.getContext('2d');
 
@@ -42,6 +43,16 @@ const MAX_BRUSH_SIZE = 50; // brush diameter in pixels at full pressure
 const OVAL_RADIUS_X = 22;  // long axis of the oval brush (rotation modes)
 const OVAL_RADIUS_Y = 4;   // short axis of the oval brush (rotation modes)
 const OVAL_STAMP_SPACING = 2; // px between stamps along a stroke
+
+// Curve fitting: the longest straight piece a fitted cubic is cut into, and the
+// most pieces one segment may become however long it is.
+const FLATTENING_STEP = 1.0;
+const MAX_PIECES = 200;
+
+// How far the control handles reach toward their targets, and the distance past
+// which a computed intersection is treated as degenerate. Krita's values.
+const CONTROL_REACH = 0.8;
+const MAX_SANE_POINT = 1e6;
 
 
 // ── Canvas setup ─────────────────────────────────────────────
@@ -126,19 +137,84 @@ function clearCanvas() {
 
 // ── Drawing ───────────────────────────────────────────────────
 
-// Draw a line segment from `from` to `to` with the given size.
-// Uses a midpoint quadratic curve for slightly smoother strokes.
-function drawSegment(from, to, size) {
-    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-    ctx.lineWidth = size;
+// Draw a line from `from` to `to` at one width, taken from the pressure at `to`.
+//
+// The width is therefore constant within a segment and changes in a step at every
+// sample boundary, which at tablet report rates is everywhere: the silhouette of a
+// stroke is a staircase rather than a ramp. Kept as a choice because seeing the
+// artefact is half of understanding why the taper below exists.
+function drawSteppedSegment(from, to) {
+    ctx.lineWidth = widthFor(to.pressure);
     ctx.strokeStyle = 'black';
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
-    ctx.quadraticCurveTo(from.x, from.y, mid.x, mid.y);
     ctx.lineTo(to.x, to.y);
     ctx.stroke();
+}
+
+// Brush diameter for one pressure reading. Mouse events report 0.5, so a mouse
+// draws at half size rather than not at all.
+function widthFor(pressure) {
+    return Math.max(1, pressure * MAX_BRUSH_SIZE);
+}
+
+// Fill the outline of two circles and the region swept between them, so the width
+// ramps continuously from one sample to the next instead of stepping. Consecutive
+// segments share an endpoint *and* a width, so the ramp is continuous across the
+// whole stroke rather than only within each piece of it.
+//
+// One closed contour, not a quad plus two circles. The obvious construction paints
+// the overlaps twice, which is invisible in opaque black and shows as darker
+// lozenges at every sample the moment the ink is translucent.
+//
+// The straight sides are the circles' external tangents: for centres `d` apart with
+// radii `ra` and `rb`, both tangent points lie along the same normal, offset from
+// the centre line by asin((ra - rb) / d). That is what makes the sides meet the
+// round caps smoothly instead of cutting across them.
+function drawTaperSegment(from, to) {
+    const a = from, b = to;
+    const ra = Math.max(widthFor(from.pressure) / 2, 0.01);
+    const rb = Math.max(widthFor(to.pressure) / 2, 0.01);
+
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.hypot(dx, dy);
+
+    ctx.fillStyle = 'black';
+    ctx.beginPath();
+
+    // Degenerate: the centres coincide, or one circle swallows the other. There are
+    // no tangents to compute and the union is just the larger circle.
+    if (d <= Math.abs(ra - rb) + 1e-4) {
+        if (ra >= rb) ctx.arc(a.x, a.y, ra, 0, Math.PI * 2);
+        else ctx.arc(b.x, b.y, rb, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+    }
+
+    const phi = Math.atan2(dy, dx);
+    const alpha = Math.asin(clamp((ra - rb) / d, -1, 1));
+
+    // The shared normal of the two external tangent lines, one either side of the axis.
+    const up = phi + Math.PI / 2 + alpha;
+    const down = phi - Math.PI / 2 - alpha;
+
+    ctx.moveTo(a.x + ra * Math.cos(up), a.y + ra * Math.sin(up));
+    ctx.lineTo(b.x + rb * Math.cos(up), b.y + rb * Math.sin(up));
+
+    // Round the far end, then the near one. Both sweeps run the same way round so the
+    // contour stays simple; together they account for the full turn the caps share.
+    ctx.arc(b.x, b.y, rb, up, up - (Math.PI + 2 * alpha), true);
+    ctx.lineTo(a.x + ra * Math.cos(down), a.y + ra * Math.sin(down));
+    ctx.arc(a.x, a.y, ra, down, down - (Math.PI - 2 * alpha), true);
+
+    ctx.closePath();
+    ctx.fill();
+}
+
+function clamp(value, low, high) {
+    return Math.min(high, Math.max(low, value));
 }
 
 // Stamp an oval at `pos` with the given radii and rotation.
@@ -184,6 +260,228 @@ function brushForMode(mode, e) {
 }
 
 
+// ── Curve fitting ─────────────────────────────────────────────
+
+// Fits a cubic through the pen samples so the ink between them follows an arc
+// rather than a chord. Krita's Bezier interpolation, by way of the C# port in
+// TheSevenPens/PenDynamicsPaint (Drawing/CurveFitter.cs); kept close to that
+// version deliberately, so the two can be compared.
+//
+// Without it a stroke is a polygon. A pointermove arrives about once a frame, so on
+// anything drawn quickly the samples are far apart and the corners between them are
+// plainly visible — which is exactly what the Straight option shows.
+//
+// It lags one sample. The tangent at a sample is the central difference through its
+// neighbours, so the segment ending at a sample cannot be drawn until the next one
+// arrives; flush() paints the one still owed when the pen lifts. The alternative, a
+// one-sided tangent, gives a curve that does not meet its neighbour smoothly, which
+// is the artifact this exists to remove.
+//
+// Output is a flattened path, not a curve: each fitted segment is subdivided into
+// short straight pieces, so whatever draws the ink keeps taking two samples at a
+// time and did not have to change.
+class CurveFitter {
+    constructor() {
+        this.reset();
+    }
+
+    reset() {
+        this.older = null;
+        this.previous = null;
+        this.previousTangent = null;
+        this.haveTangent = false;
+    }
+
+    // Take one sample, and give back the path that is now settled enough to draw.
+    // Empty for the first two samples of a stroke: there is no segment to draw until
+    // two have arrived, and no curve until three.
+    next(sample, curved) {
+        if (!curved) {
+            this.previous = sample;
+            return [sample];
+        }
+
+        if (this.previous === null) {
+            this.previous = sample;
+            return [sample];                 // the stroke has to start somewhere
+        }
+
+        const previous = this.previous;
+
+        if (!this.haveTangent) {
+            // The first tangent is a forward difference, over one interval.
+            this.previousTangent = difference(previous, sample, 1);
+            this.haveTangent = true;
+            this.older = previous;
+            this.previous = sample;
+            return [];                       // owed: the segment from older to previous
+        }
+
+        // A central difference through the neighbours, over two intervals.
+        const newTangent = difference(this.older, sample, 2);
+        const points = fitCubic(this.older, previous, this.previousTangent, newTangent);
+
+        this.previousTangent = newTangent;
+        this.older = previous;
+        this.previous = sample;
+        return points;
+    }
+
+    // The segment still owed, which is the one ending at the last sample. Without
+    // this every stroke would stop one sample short of where the pen lifted.
+    flush(curved) {
+        if (!curved || !this.haveTangent || this.older === null || this.previous === null) {
+            return [];
+        }
+
+        const closing = difference(this.older, this.previous, 1);
+        const points = fitCubic(this.older, this.previous, this.previousTangent, closing);
+
+        this.haveTangent = false;
+        this.older = null;
+        return points;
+    }
+}
+
+// A difference between two positions, divided by the number of sample intervals it
+// spans, which makes it a distance per sample. Krita divides by elapsed time to get
+// a speed; pointer events carry a timestamp but not every source fills it usefully,
+// and a divisor that silently collapsed to one would make the first tangent count
+// double.
+function difference(from, to, intervals) {
+    return { x: (to.x - from.x) / intervals, y: (to.y - from.y) / intervals };
+}
+
+// The cubic through two samples with the given end tangents, cut into straight
+// pieces. The construction is Krita's, and its shape is worth stating because the
+// arithmetic hides it: the control handles reach toward where the two tangent lines
+// would meet, but are pulled back when the tangents are similar in length, because
+// a symmetric pair overshoots into a corner rather than a curve.
+function fitCubic(from, to, tangentFrom, tangentTo) {
+    // A zero tangent carries no direction, so there is no curve to fit. A straight
+    // piece is the honest answer, and it is what Krita falls back to.
+    if (isZero(tangentFrom) || isZero(tangentTo)) return [to];
+
+    const p1 = from, p2 = to;
+    const direction1 = { x: p1.x + tangentFrom.x, y: p1.y + tangentFrom.y };
+    const direction2 = { x: p2.x - tangentTo.x, y: p2.y - tangentTo.y };
+
+    let target1, target2;
+    const meeting = meet(p1, direction1, p2, direction2);
+
+    if (crosses(direction1, direction2, p1, p2)) {
+        // The handles are on opposite sides: the curve turns back on itself, and
+        // pulling both to a common point would be wrong. Each keeps its own
+        // direction, at half the chord's length.
+        const reach = length({ x: p2.x - p1.x, y: p2.y - p1.y }) / 2;
+        target1 = along(p1, direction1, reach);
+        target2 = along(p2, direction2, reach);
+    } else if (meeting && Math.abs(meeting.x) + Math.abs(meeting.y) <= MAX_SANE_POINT) {
+        target1 = target2 = meeting;
+    } else {
+        // Parallel tangents, or a meeting point so far away it says nothing useful.
+        target1 = target2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    }
+
+    const speed1 = length(tangentFrom);
+    const speed2 = length(tangentTo);
+    if (speed1 <= 0 || speed2 <= 0) return [to];
+
+    const similarity = Math.max(0.5, Math.min(speed1 / speed2, speed2 / speed1));
+
+    // Symmetric handles overshoot into a corner, so shorten them as the speeds converge.
+    const reachCoefficient = CONTROL_REACH * (1 - Math.max(0, similarity - 0.8));
+
+    let control1, control2;
+    if (speed1 > speed2) {
+        control1 = lerp(p1, target1, reachCoefficient);
+        control2 = lerp(p2, target2, reachCoefficient * similarity);
+    } else {
+        control2 = lerp(p2, target2, reachCoefficient);
+        control1 = lerp(p1, target1, reachCoefficient * similarity);
+    }
+
+    const pieces = pieceCount(p1, control1, control2, p2);
+    const points = [];
+    for (let i = 1; i <= pieces; i++) {
+        const t = i / pieces;
+        const at = cubic(p1, control1, control2, p2, t);
+        // Pressure blended linearly in the curve parameter rather than in arc
+        // length. The two differ only where the handles are very uneven, and by
+        // less than the pen's own resolution.
+        at.pressure = from.pressure + (to.pressure - from.pressure) * t;
+        points.push(at);
+    }
+    return points;
+}
+
+// Enough pieces that none is longer than FLATTENING_STEP. Measured on the control
+// polygon, which is never shorter than the curve, so this errs toward more pieces.
+function pieceCount(p1, c1, c2, p2) {
+    const polygon = length({ x: c1.x - p1.x, y: c1.y - p1.y })
+                  + length({ x: c2.x - c1.x, y: c2.y - c1.y })
+                  + length({ x: p2.x - c2.x, y: p2.y - c2.y });
+
+    return clamp(Math.ceil(polygon / FLATTENING_STEP), 1, MAX_PIECES);
+}
+
+function cubic(p1, c1, c2, p2, t) {
+    const u = 1 - t;
+    const a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+
+    return {
+        x: a * p1.x + b * c1.x + c * c2.x + d * p2.x,
+        y: a * p1.y + b * c1.y + c * c2.y + d * p2.y,
+    };
+}
+
+function isZero(p) { return p.x === 0 && p.y === 0; }
+
+function length(p) { return Math.hypot(p.x, p.y); }
+
+function lerp(from, to, t) {
+    return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+}
+
+// A point `distance` from `origin` toward `toward`.
+function along(origin, toward, distance) {
+    const dx = toward.x - origin.x, dy = toward.y - origin.y;
+    const len = Math.hypot(dx, dy);
+    if (len <= 0) return { x: origin.x, y: origin.y };
+
+    return { x: origin.x + dx / len * distance, y: origin.y + dy / len * distance };
+}
+
+// True when the two segments cross within both of their spans.
+function crosses(a1, a2, b1, b2) {
+    const p = parameters(a1, a2, b1, b2);
+    return !!p && p.ta >= 0 && p.ta <= 1 && p.tb >= 0 && p.tb <= 1;
+}
+
+// Where two infinite lines meet, or null when they are parallel.
+function meet(a1, a2, b1, b2) {
+    const p = parameters(a1, a2, b1, b2);
+    if (!p) return null;
+
+    return { x: a1.x + (a2.x - a1.x) * p.ta, y: a1.y + (a2.y - a1.y) * p.ta };
+}
+
+// How far along each line the two of them meet.
+function parameters(a1, a2, b1, b2) {
+    const ax = a2.x - a1.x, ay = a2.y - a1.y;
+    const bx = b2.x - b1.x, by = b2.y - b1.y;
+
+    const denominator = ax * by - ay * bx;
+    if (Math.abs(denominator) < 1e-12) return null;   // parallel, or a zero-length line
+
+    const dx = b1.x - a1.x, dy = b1.y - a1.y;
+    return {
+        ta: (dx * by - dy * bx) / denominator,
+        tb: (dx * ay - dy * ax) / denominator,
+    };
+}
+
+
 // ── Info display ──────────────────────────────────────────────
 
 function updateInfo(e) {
@@ -205,14 +503,53 @@ function updateInfo(e) {
 // ── Pointer event state ───────────────────────────────────────
 
 let isDrawing = false;
+
+// The previous pointer position, for the oval-brush modes, which stamp between two
+// positions and need nothing else.
 let lastPos = null;
+
+// Where the ink last reached, for Pressure to Size. Not the same thing as the last
+// sample: what the fitter hands back is a point on the painted path, and there may
+// be many of them between two samples, or none at all.
+let lastDrawn = null;
+
+const fitter = new CurveFitter();
+
+function sampleFrom(e) {
+    return { x: e.offsetX, y: e.offsetY, pressure: e.pressure };
+}
+
+function isCurved() {
+    return strokeSelect.value === 'taper-curved';
+}
+
+// Draw from wherever the ink last reached to one more point along the path.
+function drawTo(point) {
+    if (lastDrawn) {
+        if (strokeSelect.value === 'stepped') drawSteppedSegment(lastDrawn, point);
+        else drawTaperSegment(lastDrawn, point);
+    }
+    lastDrawn = point;
+}
+
+// Paint whatever the fitter is still holding back, and forget the stroke.
+function endStroke() {
+    for (const point of fitter.flush(isCurved())) drawTo(point);
+    isDrawing = false;
+    lastPos = null;
+    lastDrawn = null;
+    fitter.reset();
+}
 
 
 // ── Pointer event handlers ────────────────────────────────────
 
 canvas.addEventListener('pointerdown', (e) => {
     isDrawing = true;
-    lastPos = { x: e.offsetX, y: e.offsetY };
+    lastPos = sampleFrom(e);
+    lastDrawn = null;
+    fitter.reset();
+    for (const point of fitter.next(sampleFrom(e), isCurved())) drawTo(point);
     updateInfo(e);
 });
 
@@ -230,12 +567,11 @@ canvas.addEventListener('pointermove', (e) => {
 
     if (!isDrawing) return;
 
-    const pos = { x: e.offsetX, y: e.offsetY };
+    const pos = sampleFrom(e);
     if (mode === 'pressure-size') {
-        // Pressure (0–1) scales the brush size.
-        // Mouse events report pressure as 0.5, so they get a mid-size brush.
-        const size = Math.max(1, e.pressure * MAX_BRUSH_SIZE);
-        drawSegment(lastPos, pos, size);
+        // Pressure (0–1) scales the brush size, and the Stroke control decides how
+        // the ink between two samples is laid down.
+        for (const point of fitter.next(pos, isCurved())) drawTo(point);
     } else {
         drawOvalStroke(lastPos, pos, brushForMode(mode, e));
     }
@@ -243,14 +579,10 @@ canvas.addEventListener('pointermove', (e) => {
     lastPos = pos;
 });
 
-canvas.addEventListener('pointerup', () => {
-    isDrawing = false;
-    lastPos = null;
-});
+canvas.addEventListener('pointerup', endStroke);
 
 canvas.addEventListener('pointerleave', () => {
-    isDrawing = false;
-    lastPos = null;
+    endStroke();
     hideCursorIndicator();
 });
 
@@ -269,7 +601,18 @@ function hideCursorIndicator() {
 
 modeSelect.addEventListener('change', () => {
     if (modeSelect.value !== 'pointer-only') hideCursorIndicator();
+    syncStrokeControl();
 });
+
+// The Stroke control decides how the ink between two samples is drawn, and only
+// Pressure to Size draws that kind of ink: the oval modes stamp ellipses, which have
+// no line width to ramp and no path to fit. Disabled rather than hidden, so it does
+// not look live when it would do nothing.
+// Dimming the label alongside it is left to CSS, which styles the whole item from
+// the disabled select.
+function syncStrokeControl() {
+    strokeSelect.disabled = modeSelect.value !== 'pressure-size';
+}
 
 
 // ── Export ────────────────────────────────────────────────────
@@ -346,4 +689,5 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+syncStrokeControl();
 resizeCanvas();
