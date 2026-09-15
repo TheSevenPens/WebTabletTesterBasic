@@ -129,7 +129,13 @@ function resizeCanvas() {
     clearCanvas();
 }
 
+// Wipes the picture *and* abandons the stroke in progress.
+//
+// Clearing only the pixels left the fitter and the filter holding samples, so releasing
+// the pen after pressing Delete painted the cleared stroke back onto the empty canvas.
+// Changing mode mid-stroke did the same thing from the other direction.
 function clearCanvas() {
+    resetStroke();
     // Fill the whole backing store, which is measured in screen pixels, so
     // drop the CSS-pixel scale for the duration of the fill.
     const transform = ctx.getTransform();
@@ -157,10 +163,19 @@ function widthFor(pressure) {
 // the overlaps twice, which is invisible in opaque black and shows as darker
 // lozenges at every sample the moment the ink is translucent.
 //
-// The straight sides are the circles' external tangents: for centres `d` apart with
-// radii `ra` and `rb`, both tangent points lie along the same normal, offset from
-// the centre line by asin((ra - rb) / d). That is what makes the sides meet the
-// round caps smoothly instead of cutting across them.
+// The straight sides are the circles' external tangents. Both touch points lie at the
+// same angle from the line of centres, and that angle is the one where the side is
+// perpendicular to the radius. Working it out: a side runs from
+// `a + ra*(cos t, sin t)` to `b + rb*(cos t, sin t)`, and requiring that direction to
+// be perpendicular to `(cos t, sin t)` gives `cos t = (ra - rb) / d` — so the offset
+// from the perpendicular is subtracted, not added.
+//
+// This had the sign the other way and drew sides that were not tangent to anything:
+// with radii 25 and 5 thirty pixels apart, the supposed tangent met the radius at a
+// dot product of -40 rather than 0, and a corner of the larger disk was left unpainted.
+// Invisible in ordinary drawing, where consecutive readings differ by a fraction of a
+// pixel and the angle is nearly zero either way; visible wherever width changes
+// sharply, which is every stroke's beginning and end.
 function drawTaperSegment(from, to) {
     const a = from, b = to;
     const ra = Math.max(widthFor(from.pressure) / 2, 0.01);
@@ -184,18 +199,19 @@ function drawTaperSegment(from, to) {
     const phi = Math.atan2(dy, dx);
     const alpha = Math.asin(clamp((ra - rb) / d, -1, 1));
 
-    // The shared normal of the two external tangent lines, one either side of the axis.
-    const up = phi + Math.PI / 2 + alpha;
-    const down = phi - Math.PI / 2 - alpha;
+    // Where the two tangent lines touch, one either side of the axis.
+    const up = phi + Math.PI / 2 - alpha;
+    const down = phi - Math.PI / 2 + alpha;
 
     ctx.moveTo(a.x + ra * Math.cos(up), a.y + ra * Math.sin(up));
     ctx.lineTo(b.x + rb * Math.cos(up), b.y + rb * Math.sin(up));
 
     // Round the far end, then the near one. Both sweeps run the same way round so the
-    // contour stays simple; together they account for the full turn the caps share.
-    ctx.arc(b.x, b.y, rb, up, up - (Math.PI + 2 * alpha), true);
+    // contour stays simple, and together they account for the whole turn: the two caps
+    // are (pi - 2*alpha) and (pi + 2*alpha), which is 2*pi however unequal the radii.
+    ctx.arc(b.x, b.y, rb, up, up - (Math.PI - 2 * alpha), true);
     ctx.lineTo(a.x + ra * Math.cos(down), a.y + ra * Math.sin(down));
-    ctx.arc(a.x, a.y, ra, down, down - (Math.PI - 2 * alpha), true);
+    ctx.arc(a.x, a.y, ra, down, down - (Math.PI + 2 * alpha), true);
 
     ctx.closePath();
     ctx.fill();
@@ -231,17 +247,20 @@ function drawOvalStroke(from, to, brush) {
 function brushForMode(mode, e) {
     switch (mode) {
         case 'azimuth-rotation':
-            return { rx: OVAL_RADIUS_X, ry: OVAL_RADIUS_Y, rot: e.azimuthAngle };
+            return { rx: OVAL_RADIUS_X, ry: OVAL_RADIUS_Y, rot: azimuthOf(e) };
         case 'altitude-size': {
             // Upright (altitude = π/2) → circle. Flat (altitude = 0) → elongated.
             // Azimuth picks the direction the ellipse stretches.
-            const tilt = 1 - Math.min(1, e.altitudeAngle / (Math.PI / 2));
+            const tilt = 1 - Math.min(1, altitudeOf(e) / (Math.PI / 2));
             const maxRx = OVAL_RADIUS_X * 2;
             const rx = OVAL_RADIUS_Y + tilt * (maxRx - OVAL_RADIUS_Y);
-            return { rx, ry: OVAL_RADIUS_Y, rot: e.azimuthAngle };
+            return { rx, ry: OVAL_RADIUS_Y, rot: azimuthOf(e) };
         }
         case 'twist-rotation':
-            return { rx: OVAL_RADIUS_X, ry: OVAL_RADIUS_Y, rot: -e.twist * Math.PI / 180 };
+            // Not negated. PointerEvent.twist and the canvas ellipse rotation both
+            // increase in the same direction, so negating it turned the brush the
+            // opposite way from the pen -- a tester reporting a direction backwards.
+            return { rx: OVAL_RADIUS_X, ry: OVAL_RADIUS_Y, rot: radians(e.twist ?? 0) };
         default:
             return { rx: OVAL_RADIUS_X, ry: OVAL_RADIUS_Y, rot: 0 };
     }
@@ -275,6 +294,13 @@ let streamlined = null;
 
 function resetSmoothing() {
     streamlined = null;
+}
+
+// Put the filter exactly on a position, so the next sample is not dragged back toward
+// where the ink had lagged to. Used when a stroke ends: the last mark belongs at the
+// place the pen was lifted, not one reading short of it.
+function settleSmoothing(sample) {
+    streamlined = { x: sample.x, y: sample.y };
 }
 
 function smooth(sample) {
@@ -417,6 +443,8 @@ function fitCubic(from, to, tangentFrom, tangentTo) {
     const speed2 = length(tangentTo);
     if (speed1 <= 0 || speed2 <= 0) return [to];
 
+    const chord = length({ x: p2.x - p1.x, y: p2.y - p1.y });
+
     const similarity = Math.max(0.5, Math.min(speed1 / speed2, speed2 / speed1));
 
     // Symmetric handles overshoot into a corner, so shorten them as the speeds converge.
@@ -430,6 +458,22 @@ function fitCubic(from, to, tangentFrom, tangentTo) {
         control2 = lerp(p2, target2, reachCoefficient);
         control1 = lerp(p1, target1, reachCoefficient * similarity);
     }
+
+    // A handle may not reach further than the segment it belongs to.
+    //
+    // Everything above is a construction for where the handles would like to point,
+    // and it has no opinion about how far. When two tangents are nearly parallel their
+    // lines meet a very long way off, and the handle chases that meeting point: input
+    // confined to sixty pixels produced ink six hundred pixels away, and a fractional
+    // change to one sample took it to five thousand. The absolute sanity limit above
+    // is far too generous to catch it, being about a screen's width squared.
+    //
+    // A cubic stays inside the convex hull of its four control points, so bounding each
+    // handle by the chord bounds the whole curve to roughly the segment it is drawn
+    // for. It changes nothing in the ordinary case, where handles reach a fraction of
+    // the chord.
+    control1 = within(p1, control1, chord);
+    control2 = within(p2, control2, chord);
 
     const pieces = pieceCount(p1, control1, control2, p2);
     const points = [];
@@ -463,6 +507,16 @@ function cubic(p1, c1, c2, p2, t) {
         x: a * p1.x + b * c1.x + c * c2.x + d * p2.x,
         y: a * p1.y + b * c1.y + c * c2.y + d * p2.y,
     };
+}
+
+// `point`, pulled back toward `anchor` if it lies further away than `limit`.
+function within(anchor, point, limit) {
+    const dx = point.x - anchor.x, dy = point.y - anchor.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= limit || distance === 0) return point;
+
+    const scale = limit / distance;
+    return { x: anchor.x + dx * scale, y: anchor.y + dy * scale };
 }
 
 function isZero(p) { return p.x === 0 && p.y === 0; }
@@ -580,6 +634,43 @@ setInterval(() => {
 }, 200);
 
 
+// ── Optional properties ───────────────────────────────────────
+
+// azimuthAngle and altitudeAngle are newer than the rest of PointerEvent: Safari only
+// grew them in 18.2. Used unconditionally they come out undefined, the readouts show
+// NaN, and the two tilt brushes hand a non-finite angle to canvas and draw nothing at
+// all -- which in a tablet tester looks exactly like hardware that is not reporting.
+//
+// Both can be derived from tiltX and tiltY, which every implementation has, so the
+// modes keep working and the numbers stay true rather than being blanked out. The
+// conversion is the one in the Pointer Events specification.
+function azimuthOf(e) {
+    if (typeof e.azimuthAngle === 'number') return e.azimuthAngle;
+
+    const x = Math.tan(radians(e.tiltX ?? 0));
+    const y = Math.tan(radians(e.tiltY ?? 0));
+    if (x === 0 && y === 0) return 0;
+
+    // atan2 gives (-pi, pi]; the property is defined over [0, 2*pi).
+    const angle = Math.atan2(y, x);
+    return angle < 0 ? angle + 2 * Math.PI : angle;
+}
+
+function altitudeOf(e) {
+    if (typeof e.altitudeAngle === 'number') return e.altitudeAngle;
+
+    const x = Math.tan(radians(e.tiltX ?? 0));
+    const y = Math.tan(radians(e.tiltY ?? 0));
+
+    // Upright when there is no tilt, which is also the specification's default.
+    return Math.atan2(1, Math.hypot(x, y));
+}
+
+function radians(degrees) {
+    return degrees * Math.PI / 180;
+}
+
+
 // ── Info display ──────────────────────────────────────────────
 
 function updateInfo(e) {
@@ -588,14 +679,21 @@ function updateInfo(e) {
     infoEls.pressure.textContent = e.pressure.toFixed(3);
     infoEls.tiltX.textContent    = e.tiltX.toFixed(1) + '°';
     infoEls.tiltY.textContent    = e.tiltY.toFixed(1) + '°';
-    infoEls.azimuth.textContent  = toDeg(e.azimuthAngle) + '°';
-    infoEls.altitude.textContent = toDeg(e.altitudeAngle) + '°';
+    infoEls.azimuth.textContent  = toDeg(azimuthOf(e)) + '°';
+    infoEls.altitude.textContent = toDeg(altitudeOf(e)) + '°';
     infoEls.twist.textContent    = e.twist.toFixed(1) + '°';
     infoEls.eraser.textContent   = (e.buttons & ERASER_BUTTON_BIT) ? 'yes' : 'no';
     // Show the buttons bitmask as a 6-bit binary string so all defined
     // pointer buttons (tip, barrel, middle, X1, X2, eraser) are visible.
     infoEls.buttons.textContent  = '0b' + e.buttons.toString(2).padStart(6, '0');
     infoEls.rate.textContent     = reportRate();
+}
+
+
+// Say that there is nothing to report, rather than leaving the last pointer's values
+// standing as though they were still true.
+function blankInfo() {
+    for (const el of Object.values(infoEls)) el.textContent = '---';
 }
 
 
@@ -612,9 +710,36 @@ let lastPos = null;
 // be many of them between two samples, or none at all.
 let lastDrawn = null;
 
+// The pressure of the last sample that had any. A release reports zero, and ending a
+// stroke at zero width would undo its final mark rather than finish it.
+let lastPressure = 0;
+
 const fitter = new CurveFitter();
 
+// Whether the pen, mouse or finger is actually touching.
+//
+// Not the same question as "did a pointerdown arrive". A pen's barrel button sends one
+// while the tip is still in the air, and holding that button while lifting the tip
+// sends no pointerup -- so a stroke would begin on a button press and continue after
+// the pen had left the tablet. Contact is the tip, or the eraser end.
+function isContact(e) {
+    return (e.buttons & (1 | ERASER_BUTTON_BIT)) !== 0;
+}
+
+// Forget everything about the stroke in progress. Called wherever one can end, which is
+// more places than a pointerup: a release, the pointer leaving, a cancellation, Clear,
+// a change of mode, and a resize.
+function resetStroke() {
+    isDrawing = false;
+    lastPos = null;
+    lastDrawn = null;
+    fitter.reset();
+    resetSmoothing();
+}
+
 function sampleFrom(e) {
+    if (e.pressure > 0) lastPressure = e.pressure;
+
     return { x: e.offsetX, y: e.offsetY, pressure: e.pressure };
 }
 
@@ -624,27 +749,55 @@ function drawTo(point) {
     lastDrawn = point;
 }
 
-// Paint whatever the fitter is still holding back, and forget the stroke.
-function endStroke() {
+// Mark the point of contact, so that a tap leaves something behind.
+//
+// Without this a press and release with no movement drew nothing at all: the fitter
+// has no segment until a second sample arrives, and the oval modes stamp only between
+// two positions. Tapping is the first thing anyone does to check a pen works.
+function beginStroke(e, mode) {
+    const at = sampleFrom(e);
+
+    if (mode === 'pressure-size') {
+        for (const point of fitter.next(smooth(at))) drawTo(point);
+        drawTaperSegment(at, at);
+    } else {
+        stampOval(at, brushForMode(mode, e));
+    }
+}
+
+// Finish at the position the pen was actually lifted from, then forget the stroke.
+//
+// The filter lags by a reading and the fitter holds a segment back, so flushing alone
+// leaves the ink short of where the pen left: pressed at 100, moved to 200, released at
+// 220, the last mark landed at 150. Settling the filter onto the release position and
+// feeding it through fixes both lags at once.
+function endStroke(e) {
+    if (isDrawing && e && modeSelect.value === 'pressure-size' && isFinite(e.offsetX)) {
+        const at = { x: e.offsetX, y: e.offsetY, pressure: lastPressure };
+        settleSmoothing(at);
+        for (const point of fitter.next(at)) drawTo(point);
+    }
+
     for (const point of fitter.flush()) drawTo(point);
-    isDrawing = false;
-    lastPos = null;
-    lastDrawn = null;
-    fitter.reset();
-    resetSmoothing();
+    resetStroke();
 }
 
 
 // ── Pointer event handlers ────────────────────────────────────
 
 canvas.addEventListener('pointerdown', (e) => {
+    updateInfo(e);
+
+    const mode = modeSelect.value;
+    if (mode === 'pointer-only') return;
+
+    // A barrel button in mid-air also sends a pointerdown. Only contact draws.
+    if (!isContact(e)) return;
+
+    resetStroke();
     isDrawing = true;
     lastPos = sampleFrom(e);
-    lastDrawn = null;
-    fitter.reset();
-    resetSmoothing();
-    for (const point of fitter.next(smooth(sampleFrom(e)))) drawTo(point);
-    updateInfo(e);
+    beginStroke(e, mode);
 });
 
 // Every position the pen reported since the last frame, rather than the single one
@@ -679,6 +832,13 @@ canvas.addEventListener('pointermove', (e) => {
 
     if (!isDrawing) return;
 
+    // Contact can end without a pointerup: lifting the tip while the barrel button is
+    // still held sends a move with the button bit and no contact bit.
+    if (!isContact(e)) {
+        endStroke(e);
+        return;
+    }
+
     const pos = sampleFrom(e);
     if (mode === 'pressure-size') {
         // Pressure (0–1) scales the brush size.
@@ -692,11 +852,26 @@ canvas.addEventListener('pointermove', (e) => {
     lastPos = pos;
 });
 
-canvas.addEventListener('pointerup', endStroke);
+canvas.addEventListener('pointerup', (e) => {
+    endStroke(e);
 
-canvas.addEventListener('pointerleave', () => {
-    endStroke();
+    // After the release, not before: the panel should report a released pen rather than
+    // keep showing the pressure and buttons of the last moment it was down.
+    updateInfo(e);
+});
+
+canvas.addEventListener('pointercancel', (e) => {
+    endStroke(e);
+    updateInfo(e);
+});
+
+canvas.addEventListener('pointerleave', (e) => {
+    endStroke(e);
     hideCursorIndicator();
+
+    // Nothing is being reported any more, and the last values were about a pointer that
+    // has gone. Dashes are what the panel says before anything has been seen.
+    blankInfo();
 });
 
 
@@ -714,6 +889,10 @@ function hideCursorIndicator() {
 
 modeSelect.addEventListener('change', () => {
     if (modeSelect.value !== 'pointer-only') hideCursorIndicator();
+
+    // Whatever is half-drawn belongs to the mode being left. Finishing it under the new
+    // one would paint a segment nobody asked for, in a style nobody chose.
+    resetStroke();
 });
 
 

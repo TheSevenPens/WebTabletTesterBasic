@@ -42,6 +42,13 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - **Twist to Brush rotation**: rotating the pen barrel rotates the oval (only relevant on hardware that reports twist)
 - **Pointer only (no drawing)**: a red crosshair follows the pointer; no strokes are drawn. Crosshair stays visible while pressing. Crosshair hides on pointerleave and when switching to another mode.
 - Readouts (tiltX/Y, azimuth, altitude, twist) update live regardless of mode
+- A tap — press and release without moving — leaves a mark in all four drawing modes
+- A stroke reaches the position the pen was lifted from, not one reading short of it
+- Pressing a pen's barrel button in mid-air draws nothing, and lifting the tip while holding it ends the stroke
+- Clearing mid-stroke and then releasing leaves the canvas empty; changing mode mid-stroke does not paint the abandoned one
+- Releasing updates the readouts to the released state; the pointer leaving blanks them
+- Twist rotates the brush the same way the pen turns
+- With `azimuthAngle`/`altitudeAngle` removed from `PointerEvent.prototype`, both tilt modes still draw and both readouts still show numbers
 - Delete / Backspace clears the canvas; the Clear button clears the canvas
 - Window resize re-fits and clears the canvas
 - **HiDPI rendering**: on a display with `devicePixelRatio` > 1, stroke edges are crisp rather than blocky. Browser zoom (Ctrl +/-) and dragging the window to a monitor with a different scale factor both re-size the backing store and keep strokes crisp
