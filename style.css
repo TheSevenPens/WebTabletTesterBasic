@@ -61,8 +61,12 @@ body {
     min-width: 8ch;
 }
 
-#val-rate {
-    min-width: 4ch;
+/* Right-aligned, so the room reserved for a wider figure opens up before the
+   number rather than between it and the word it belongs to. */
+#val-pen-rate,
+#val-used-rate {
+    min-width: 3ch;
+    text-align: right;
 }
 
 /* A control that does not apply to the current mode. Dimmed here rather than in

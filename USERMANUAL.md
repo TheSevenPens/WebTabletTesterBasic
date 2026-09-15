@@ -37,7 +37,7 @@ moving under the pointer as values change width.
 | **Twist** | 0° – 359°. Rotation around the pen's long axis (barrel rotation). |
 | **Eraser** | `yes` when the eraser end of the pen is in contact, `no` otherwise. Detected via the eraser bit (32) of `PointerEvent.buttons`. Not all pens have an eraser end, and some drivers report the eraser as a normal tip contact — see [Known quirks](#known-quirks). |
 | **Buttons** | The raw `PointerEvent.buttons` bitmask shown in binary (6 bits). From least significant: tip/primary, barrel/secondary, middle, X1, X2, eraser. Handy for spotting which buttons your driver reports. |
-| **Points/s** | How many positions your pen is reporting each second — see [Report rate](#report-rate). `n/a` means this browser cannot say. |
+| **Points/s** | Two numbers: how many positions your pen reports each second, and how many of those the stroke is built from — see [Report rate](#report-rate). `n/a` means this browser cannot say. |
 | **About** | Opens a dialog with Code and Docs links. |
 
 If a value stays at `0` or `---` while you draw, your pen or driver isn't reporting that property.
@@ -88,34 +88,40 @@ version on purpose so the two can be compared.
 
 ## Report rate
 
-**Points/s is how many positions your pen sends every second while you draw.** A mouse is usually
-around 125. Drawing tablets are typically 130 to 250, and some are much faster.
+Two numbers, and the gap between them is the interesting part.
 
-It is worth knowing because it is the ceiling on how much detail any drawing application can have.
-A pen reporting 200 times a second gives an application 200 chances a second to notice that you
-changed direction or pressed harder. One reporting 60 gives it 60.
+**pen** — how many positions your pen sends every second. A mouse is usually around 125. Drawing
+tablets are typically 130 to 250, and some are much faster. This is your hardware.
 
-**Why this is not simply "count the events".** The browser does not hand a web page every reading
-as it arrives. It waits until the screen is about to redraw — around 60 times a second on most
-displays — and delivers everything that has happened since in one go. Counting those deliveries
-would measure your *monitor* and call it your pen. This readout counts the readings inside each
-delivery, which is what `getCoalescedEvents()` exists to provide.
+**used** — how many of those the stroke on screen is actually built from. This is normally about 60,
+whatever the pen is doing, because it matches how often your screen redraws.
+
+So a tablet reporting 200 times a second has roughly 140 of those readings a second discarded before
+anything is drawn. That is not a fault in this app; it is how a web page ordinarily receives pen
+input, and the same is true of most drawing done in a browser.
+
+**Why the two numbers differ.** The browser does not hand a web page every reading as it arrives. It
+waits until the screen is about to redraw and delivers everything that has happened since in one
+bundle. An application that takes one position from each bundle — which is the usual thing to do,
+and what this app does — gets the display's rate. The rest are still in the bundle, unopened, and
+counting them is how **pen** is measured.
 
 **What the values mean**
 
-- **A number** — measured over the last second of movement. It settles after about a fifth of a
+- **Numbers** — measured over the last second of movement. They settle after about a fifth of a
   second of drawing.
 - **`---`** — nothing is moving, or not enough has happened yet to measure.
 - **`n/a`** — this browser cannot report it. Chrome, Edge and Firefox have been able to for years;
-  Safari only from **18.2**, so an older iPad or Mac says `n/a`. There is no way to measure the pen's
-  rate in those browsers: all a page can see is the display's.
+  Safari only from **18.2**, so an older iPad or Mac says `n/a`. In those browsers a page cannot
+  measure the pen's rate at all — only the display's.
+- **pen and used the same** — nothing is being discarded, because the pen is not reporting faster
+  than the screen refreshes. Normal for a mouse.
 
-**One thing this readout reveals about the app itself.** The strokes on screen are drawn from one
-delivery per screen refresh, not from every reading. So if Points/s says 200, the stroke you are
-looking at was still drawn from roughly 60 positions a second, and the other 140 went unused. That
-is the ordinary way a web application handles pen input, and the gap between the two numbers is
-what interpolation — the **Taper (curved)** option under [Stroke rendering](#stroke-rendering) —
-is there to paper over.
+**What the difference costs you.** Every discarded reading is a small piece of the shape of your
+stroke that no application ever saw: a change of direction, a moment of pressure. The
+**Taper (curved)** option under [Stroke rendering](#stroke-rendering) guesses some of it back by
+fitting a curve through the positions it did get, which is what most drawing software does. It is a
+good guess, not the real thing.
 
 ## OS & browser compatibility
 

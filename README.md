@@ -39,7 +39,7 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - **Twist to Brush rotation**: rotating the pen barrel rotates the oval (only relevant on hardware that reports twist)
 - **Pointer only (no drawing)**: a red crosshair follows the pointer; no strokes are drawn. Crosshair stays visible while pressing. Crosshair hides on pointerleave and when switching to another mode.
 - Readouts (tiltX/Y, azimuth, altitude, twist) update live regardless of mode
-- **Points/s**: shows a number while a real pointer is moving, returns to `---` within about half a second of it stopping, and reads `n/a` in a browser without `getCoalescedEvents()`. Events dispatched from script contribute nothing, since an untrusted event has an empty coalesced list — so the figure under a real pen cannot be checked by automation
+- **Points/s**: both numbers appear while a real pointer is moving and return to `---` within about half a second of it stopping; both read `n/a` in a browser without `getCoalescedEvents()`. With a mouse the two are equal, since nothing is being merged. **A tablet is the only way to check that they can differ** — events dispatched from script contribute nothing, an untrusted event having an empty coalesced list
 - Delete / Backspace clears the canvas; the Clear button clears the canvas
 - Window resize re-fits and clears the canvas
 - **HiDPI rendering**: on a display with `devicePixelRatio` > 1, stroke edges are crisp rather than blocky. Browser zoom (Ctrl +/-) and dragging the window to a monitor with a different scale factor both re-size the backing store and keep strokes crisp

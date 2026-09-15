@@ -47,7 +47,11 @@
         <span class="info-item">Twist: <span id="val-twist" class="val">---</span></span>
         <span class="info-item">Eraser: <span id="val-eraser" class="val">---</span></span>
         <span class="info-item">Buttons: <span id="val-buttons" class="val">---</span></span>
-        <span class="info-item" title="How many positions your pen is reporting each second, measured over the last second of drawing. Includes the samples the browser merges into each move event.">Points/s: <span id="val-rate" class="val">---</span></span>
+        <!-- One item, so a wrap never separates the pair. The two numbers only mean
+             anything next to each other: the gap between them is what is thrown away. -->
+        <span class="info-item" title="Points per second. Pen is what your hardware reports; Used is how many of those the stroke is built from, which is one per screen refresh. The difference is discarded.">Points/s:
+            <span id="val-pen-rate" class="val">---</span> pen,
+            <span id="val-used-rate" class="val">---</span> used</span>
     </div>
 </div>
 

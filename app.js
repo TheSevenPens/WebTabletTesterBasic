@@ -32,7 +32,8 @@ const infoEls = {
     twist:    document.getElementById('val-twist'),
     eraser:   document.getElementById('val-eraser'),
     buttons:  document.getElementById('val-buttons'),
-    rate:     document.getElementById('val-rate'),
+    penRate:  document.getElementById('val-pen-rate'),
+    usedRate: document.getElementById('val-used-rate'),
 };
 
 // Whether this browser can say what it merged. Chrome, Edge and Firefox have had
@@ -503,7 +504,7 @@ function updateInfo(e) {
     // Show the buttons bitmask as a 6-bit binary string so all defined
     // pointer buttons (tip, barrel, middle, X1, X2, eraser) are visible.
     infoEls.buttons.textContent  = '0b' + e.buttons.toString(2).padStart(6, '0');
-    infoEls.rate.textContent = sampleRate();
+    showRates();
 }
 
 
@@ -551,31 +552,47 @@ function noteSamples(e) {
     while (rateWindow.length > 1 && now - rateWindow[0].at > RATE_WINDOW_MS) rateWindow.shift();
 }
 
-function sampleRate() {
-    // Without getCoalescedEvents the only thing countable is move events, which
-    // is the display's rate wearing the pen's name. Better to say nothing.
-    if (!HAS_COALESCED) return 'n/a';
-    if (rateWindow.length < 2) return '---';
+// Two rates from the same window, because the gap between them is the point.
+//
+//   pen   what the hardware reports
+//   used  what the stroke is built from, which is one sample per move event and
+//         therefore one per screen refresh
+//
+// Everything in between is thrown away. Saying only the first would invite
+// reading it as the rate the drawing uses, which it is not.
+function rates() {
+    // Without getCoalescedEvents the only thing countable is move events, so the
+    // pen's rate is unknowable and both numbers would be the display's.
+    if (!HAS_COALESCED) return { pen: 'n/a', used: 'n/a' };
+    if (rateWindow.length < 2) return { pen: '---', used: '---' };
 
     const first = rateWindow[0];
     const last = rateWindow[rateWindow.length - 1];
-    if (performance.now() - last.at > RATE_IDLE_MS) return '---';
+    if (performance.now() - last.at > RATE_IDLE_MS) return { pen: '---', used: '---' };
 
     const span = last.at - first.at;
-    if (span < RATE_MIN_SPAN_MS) return '---';
+    if (span < RATE_MIN_SPAN_MS) return { pen: '---', used: '---' };
 
-    // The first entry's samples were reported before its timestamp, so they are
-    // outside the span being divided by and counting them would inflate the rate.
+    // The first entry is excluded from both counts: its samples were reported
+    // before its timestamp, so they fall outside the span being divided by.
     let samples = 0;
     for (let i = 1; i < rateWindow.length; i++) samples += rateWindow[i].samples;
 
-    return String(Math.round(samples / span * 1000));
+    const perSecond = count => String(Math.round(count / span * 1000));
+
+    return { pen: perSecond(samples), used: perSecond(rateWindow.length - 1) };
 }
 
-// The readouts are otherwise driven by pointer events, so without this the rate
-// would keep claiming whatever it last measured after the pen was lifted.
+function showRates() {
+    const { pen, used } = rates();
+    infoEls.penRate.textContent = pen;
+    infoEls.usedRate.textContent = used;
+}
+
+// The readouts are otherwise driven by pointer events, so without this they would
+// keep claiming whatever was last measured after the pen was lifted.
 setInterval(() => {
-    if (infoEls.rate.textContent !== '---') infoEls.rate.textContent = sampleRate();
+    if (infoEls.penRate.textContent !== '---') showRates();
 }, 200);
 
 
