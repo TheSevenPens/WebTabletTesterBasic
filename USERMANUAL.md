@@ -27,6 +27,7 @@ moving under the pointer as values change width.
 | **Clear** | Wipes the canvas. |
 | **Export…** | Save the current canvas as a PNG file, or copy it to the clipboard as an image (paste into chat, an image editor, etc.). The image is captured at your display's full pixel resolution, so stroke detail survives zooming in. Useful for sharing what your pen is producing when reporting a driver issue. |
 | **Mode** | Picks which pen input drives the brush — see below. |
+| **Use all pen points** | Draw from every position the pen reported, instead of the one per screen refresh a browser hands over on its own — see [Report rate](#report-rate). Pressure to Size only, and only where the browser can supply them. |
 | **Stroke** | How the ink between two pen samples is drawn — see [Stroke rendering](#stroke-rendering). Only **Pressure to Size** draws that kind of ink, so the control is disabled in the other modes. |
 | **Type** | `pen`, `mouse`, or `touch` — what the browser thinks the input device is. |
 | **Pressure** | 0.000 – 1.000. Mouse always reports `0.5`. |
@@ -122,6 +123,20 @@ stroke that no application ever saw: a change of direction, a moment of pressure
 **Taper (curved)** option under [Stroke rendering](#stroke-rendering) guesses some of it back by
 fitting a curve through the positions it did get, which is what most drawing software does. It is a
 good guess, not the real thing.
+
+**Use all pen points** stops discarding them. Tick it and **used** climbs to meet **pen**, because
+the stroke is now built from every reading the browser had rather than one per screen refresh. The
+box is off by default deliberately: the default is what an ordinary web page does, and the point of
+this tool is to show you that first.
+
+Two things are worth watching when you turn it on. The stroke follows your hand more closely,
+most visibly on anything drawn quickly — slow strokes look the same either way, because the samples
+were already close together. And the difference between **Taper (straight)** and **Taper (curved)**
+very nearly disappears, because the gaps the curve was there to bridge are now a few pixels wide.
+That is the clearest demonstration in the app of what interpolation is for.
+
+It costs nothing in lag. The extra positions arrived in the same event as the one you were already
+being given; they were simply going unopened.
 
 ## OS & browser compatibility
 

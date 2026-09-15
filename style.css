@@ -71,8 +71,21 @@ body {
 
 /* A control that does not apply to the current mode. Dimmed here rather than in
    script, so the reason lives with the rest of the appearance. */
-.control-item:has(select:disabled) {
+.control-item:has(select:disabled),
+.control-item:has(input:disabled) {
     opacity: 0.5;
+}
+
+/* The checkbox and its words are one target. */
+label.control-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+label.control-item:has(input:disabled) {
+    cursor: default;
 }
 
 #export {

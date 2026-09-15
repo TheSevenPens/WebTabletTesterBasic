@@ -19,6 +19,7 @@ const canvas  = document.getElementById('canvas');
 const toolbar = document.getElementById('toolbar');
 const modeSelect = document.getElementById('mode');
 const strokeSelect = document.getElementById('stroke');
+const allPointsCheck = document.getElementById('allpoints');
 const cursorIndicator = document.getElementById('cursor-indicator');
 const ctx = canvas.getContext('2d');
 
@@ -530,8 +531,8 @@ const RATE_IDLE_MS = 400;
 
 let rateWindow = [];
 
-// Record what one move event actually carried.
-function noteSamples(e) {
+// Record what one move event carried, and how many of those the app acted on.
+function noteSamples(e, used) {
     if (!HAS_COALESCED || typeof e.getCoalescedEvents !== 'function') return;
     if (e.type !== 'pointermove' && e.type !== 'pointerrawupdate') return;
 
@@ -548,7 +549,7 @@ function noteSamples(e) {
     const previous = rateWindow[rateWindow.length - 1];
     if (previous && now - previous.at > RATE_IDLE_MS) rateWindow = [];
 
-    rateWindow.push({ at: now, samples });
+    rateWindow.push({ at: now, samples, used });
     while (rateWindow.length > 1 && now - rateWindow[0].at > RATE_WINDOW_MS) rateWindow.shift();
 }
 
@@ -575,12 +576,15 @@ function rates() {
 
     // The first entry is excluded from both counts: its samples were reported
     // before its timestamp, so they fall outside the span being divided by.
-    let samples = 0;
-    for (let i = 1; i < rateWindow.length; i++) samples += rateWindow[i].samples;
+    let samples = 0, used = 0;
+    for (let i = 1; i < rateWindow.length; i++) {
+        samples += rateWindow[i].samples;
+        used += rateWindow[i].used;
+    }
 
     const perSecond = count => String(Math.round(count / span * 1000));
 
-    return { pen: perSecond(samples), used: perSecond(rateWindow.length - 1) };
+    return { pen: perSecond(samples), used: perSecond(used) };
 }
 
 function showRates() {
@@ -650,9 +654,18 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 canvas.addEventListener('pointermove', (e) => {
-    noteSamples(e);
-    updateInfo(e);
     const mode = modeSelect.value;
+
+    // Every position the pen reported since the last frame, when asked for and
+    // when there is a stroke to put them in. Null means the ordinary thing: act
+    // on the one position the event carries and discard the rest.
+    let burst = mode === 'pressure-size' && isDrawing && usingAllPoints()
+        ? e.getCoalescedEvents()
+        : null;
+    if (burst && burst.length === 0) burst = null;   // untrusted event
+
+    noteSamples(e, burst ? burst.length : 1);
+    updateInfo(e);
 
     if (mode === 'pointer-only') {
         // Show a visible cursor at the reported position; never draw.
@@ -668,7 +681,9 @@ canvas.addEventListener('pointermove', (e) => {
     if (mode === 'pressure-size') {
         // Pressure (0–1) scales the brush size, and the Stroke control decides how
         // the ink between two samples is laid down.
-        for (const point of fitter.next(pos, isCurved())) drawTo(point);
+        for (const sample of burst ? [...burst].map(sampleFrom) : [pos]) {
+            for (const point of fitter.next(sample, isCurved())) drawTo(point);
+        }
     } else {
         drawOvalStroke(lastPos, pos, brushForMode(mode, e));
     }
@@ -706,9 +721,18 @@ modeSelect.addEventListener('change', () => {
 // no line width to ramp and no path to fit. Disabled rather than hidden, so it does
 // not look live when it would do nothing.
 // Dimming the label alongside it is left to CSS, which styles the whole item from
-// the disabled select.
+// the disabled control.
 function syncStrokeControl() {
-    strokeSelect.disabled = modeSelect.value !== 'pressure-size';
+    const drawsStrokes = modeSelect.value === 'pressure-size';
+    strokeSelect.disabled = !drawsStrokes;
+
+    // Nothing to use in a browser that will not hand the extra samples over, and
+    // nowhere to put them in a mode that stamps ovals.
+    allPointsCheck.disabled = !drawsStrokes || !HAS_COALESCED;
+}
+
+function usingAllPoints() {
+    return HAS_COALESCED && allPointsCheck.checked;
 }
 
 
