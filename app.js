@@ -32,7 +32,13 @@ const infoEls = {
     twist:    document.getElementById('val-twist'),
     eraser:   document.getElementById('val-eraser'),
     buttons:  document.getElementById('val-buttons'),
+    coalesced: document.getElementById('val-coalesced'),
 };
+
+// Whether this browser can say what it merged. Chrome, Edge and Firefox have had
+// it for years; Safari only from 18.2, so an older iPad reports nothing here and
+// the readout says so rather than claiming one sample per move.
+const HAS_COALESCED = typeof PointerEvent.prototype.getCoalescedEvents === 'function';
 
 // PointerEvent.buttons is a bitmask. Bit 5 (value 32) is the eraser end
 // of a stylus per the Pointer Events spec.
@@ -497,6 +503,29 @@ function updateInfo(e) {
     // Show the buttons bitmask as a 6-bit binary string so all defined
     // pointer buttons (tip, barrel, middle, X1, X2, eraser) are visible.
     infoEls.buttons.textContent  = '0b' + e.buttons.toString(2).padStart(6, '0');
+    infoEls.coalesced.textContent = coalescedCount(e);
+}
+
+// How many pen samples the browser merged into this one event.
+//
+// A pointermove is delivered about once per animation frame, so a tablet
+// reporting at 200 Hz against a 60 Hz display has roughly three samples to hand
+// over and shows one. This is the only place in the app where the tablet's own
+// report rate is visible at all: every stroke drawn from pointermove alone is
+// sampled at the display's rate, not the pen's.
+//
+// Untrusted events report nothing. Anything dispatched from script has an empty
+// coalesced list by definition, so this reads 0 when the app is driven
+// programmatically and only means something under a real pen.
+function coalescedCount(e) {
+    if (!HAS_COALESCED) return 'n/a';
+
+    // Only move events carry a list. On a press or a release there is nothing to
+    // have merged, and saying '1' there would invite reading it as a rate.
+    if (typeof e.getCoalescedEvents !== 'function') return '---';
+    if (e.type !== 'pointermove' && e.type !== 'pointerrawupdate') return '---';
+
+    return String(e.getCoalescedEvents().length);
 }
 
 

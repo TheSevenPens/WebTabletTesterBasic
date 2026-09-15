@@ -37,6 +37,7 @@ moving under the pointer as values change width.
 | **Twist** | 0° – 359°. Rotation around the pen's long axis (barrel rotation). |
 | **Eraser** | `yes` when the eraser end of the pen is in contact, `no` otherwise. Detected via the eraser bit (32) of `PointerEvent.buttons`. Not all pens have an eraser end, and some drivers report the eraser as a normal tip contact — see [Known quirks](#known-quirks). |
 | **Buttons** | The raw `PointerEvent.buttons` bitmask shown in binary (6 bits). From least significant: tip/primary, barrel/secondary, middle, X1, X2, eraser. Handy for spotting which buttons your driver reports. |
+| **Coalesced** | How many pen samples the browser merged into the last move event — see [Report rate](#report-rate). `n/a` means this browser cannot say. |
 | **About** | Opens a dialog with Code and Docs links. |
 
 If a value stays at `0` or `---` while you draw, your pen or driver isn't reporting that property.
@@ -84,6 +85,27 @@ its neighbours smoothly, and every application that fits curves to pen input pay
 The curve fitting is Krita's, by way of the C# implementation in
 [PenDynamicsPaint](https://github.com/TheSevenPens/PenDynamicsPaint), and is kept close to that
 version on purpose so the two can be compared.
+
+## Report rate
+
+A `pointermove` event is delivered about once per animation frame, not once per pen sample. A tablet
+reporting at 200 Hz against a 60 Hz display therefore has roughly three samples to hand over and
+shows you one; the rest are merged into it. **Coalesced** is how many were in that merge.
+
+- **1** every time — the browser is giving you everything it has, which usually means the tablet
+  reports at or below the display's refresh rate. A mouse normally reads 1.
+- **2 or more** while drawing — your tablet reports faster than the screen refreshes, and that is
+  the multiple. It rises with tablet speed and falls if the display is fast.
+- **`n/a`** — this browser has no `getCoalescedEvents()`. Chrome, Edge and Firefox have had it for
+  years; Safari only from **18.2**, so an older iPad or Mac reports `n/a` here.
+- **`---`** — nothing to report yet, or the last event was a press rather than a move.
+- **0** — the event was not real. Anything dispatched from script has an empty coalesced list by
+  definition, which only shows up if you are driving the app programmatically.
+
+Worth knowing: **the strokes on screen do not use the merged samples.** They are drawn from the one
+event per frame, so what you draw is sampled at the display's rate rather than the pen's. That is
+the ordinary way a web app handles pointer input, and this readout is how you can tell what it is
+costing you.
 
 ## OS & browser compatibility
 
