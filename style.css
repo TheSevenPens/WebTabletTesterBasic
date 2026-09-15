@@ -69,6 +69,12 @@ body {
     text-align: right;
 }
 
+#val-x,
+#val-y {
+    min-width: 7ch;
+    text-align: right;
+}
+
 /* A control that does not apply to the current mode. Dimmed here rather than in
    script, so the reason lives with the rest of the appearance. */
 .control-item:has(select:disabled),

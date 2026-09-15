@@ -25,6 +25,8 @@ const ctx = canvas.getContext('2d');
 
 const infoEls = {
     type:     document.getElementById('val-type'),
+    x:        document.getElementById('val-x'),
+    y:        document.getElementById('val-y'),
     pressure: document.getElementById('val-pressure'),
     tiltX:    document.getElementById('val-tiltX'),
     tiltY:    document.getElementById('val-tiltY'),
@@ -495,6 +497,8 @@ function parameters(a1, a2, b1, b2) {
 function updateInfo(e) {
     const toDeg = radians => (radians * 180 / Math.PI).toFixed(1);
     infoEls.type.textContent     = e.pointerType || '---';
+    infoEls.x.textContent        = position(e.clientX);
+    infoEls.y.textContent        = position(e.clientY);
     infoEls.pressure.textContent = e.pressure.toFixed(3);
     infoEls.tiltX.textContent    = e.tiltX.toFixed(1) + '°';
     infoEls.tiltY.textContent    = e.tiltY.toFixed(1) + '°';
@@ -506,6 +510,27 @@ function updateInfo(e) {
     // pointer buttons (tip, barrel, middle, X1, X2, eraser) are visible.
     infoEls.buttons.textContent  = '0b' + e.buttons.toString(2).padStart(6, '0');
     showRates();
+}
+
+
+// A coordinate, always to two decimals.
+//
+// Pointer positions are doubles in the spec, not integers, and a pen can report
+// between pixels. Whether a given browser and driver actually pass that through
+// is the thing worth seeing, so the decimals are always shown: .00 every time
+// means whole pixels, and anything else means finer than the screen can draw.
+//
+// Taken from clientX/clientY rather than offsetX/offsetY, which is the only part
+// of this that needed thought. An offset is the client position minus the
+// canvas's own left edge, and that edge is very often a fraction — so offsets
+// come out fractional on a device reporting perfectly whole pixels, and the
+// readout would answer a question about the browser with a fact about the
+// layout. The stroke is still drawn from the offsets; only the display differs,
+// and the two carry the same precision.
+//
+// The display only. Nothing here rounds the value the stroke is drawn from.
+function position(value) {
+    return typeof value === 'number' && isFinite(value) ? value.toFixed(2) : '---';
 }
 
 

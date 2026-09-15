@@ -30,6 +30,7 @@ moving under the pointer as values change width.
 | **Use all pen points** | Draw from every position the pen reported, instead of the one per screen refresh a browser hands over on its own — see [Report rate](#report-rate). Pressure to Size only, and only where the browser can supply them. |
 | **Stroke** | How the ink between two pen samples is drawn — see [Stroke rendering](#stroke-rendering). Only **Pressure to Size** draws that kind of ink, so the control is disabled in the other modes. |
 | **Type** | `pen`, `mouse`, or `touch` — what the browser thinks the input device is. |
+| **X, Y** | Where the pointer is, in CSS pixels, relative to the window. Always to two decimals — see [Position precision](#position-precision). |
 | **Pressure** | 0.000 – 1.000. Mouse always reports `0.5`. |
 | **Tilt X** | -90° to 90°. Left/right tilt of the pen. |
 | **Tilt Y** | -90° to 90°. Forward/back tilt of the pen. |
@@ -137,6 +138,27 @@ That is the clearest demonstration in the app of what interpolation is for.
 
 It costs nothing in lag. The extra positions arrived in the same event as the one you were already
 being given; they were simply going unopened.
+
+## Position precision
+
+A mouse reports whole pixels. A pen does not have to: pointer positions are decimal numbers in the
+specification, and a tablet measures far more finely than a screen can show. Whether you get that
+precision depends on your browser and driver, so the two decimals are always displayed.
+
+- **`.00` every time you move** — you are getting whole pixels and nothing finer.
+- **Anything else** — your pen is being reported between pixels, which is more precise than the
+  screen can draw and more precise than a mouse can be.
+
+This is not the same thing as your tablet's own resolution. A drawing tablet measures in its own
+units — often thousands per inch, far more than the pixels across your screen — and no web page can
+ask for those. What a page can have is fractions of a pixel, which on a high-density display is
+already finer than anything you can see.
+
+**Why the number is measured from the window and not from the canvas.** A canvas's left edge often
+sits on a fraction of a pixel. Subtracting it would make the position fractional even when the pen
+reported a whole number, and this readout would then be answering a question about the page layout
+while appearing to answer one about your hardware. Strokes are still drawn from the canvas-relative
+position; it carries exactly the same precision.
 
 ## OS & browser compatibility
 

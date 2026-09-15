@@ -43,6 +43,11 @@
     </div>
     <div class="toolbar-row" id="readout-row">
         <span class="info-item">Type: <span id="val-type" class="val">---</span></span>
+        <!-- Two decimals always, so a whole number looks like one. Whether a browser
+             reports positions between pixels is the question this answers. -->
+        <span class="info-item" title="Pointer position in CSS pixels, relative to the window. Shown to two decimals: anything other than .00 means this browser is reporting between pixels, which is finer than the screen can draw.">X, Y:
+            <span id="val-x" class="val">---</span>,
+            <span id="val-y" class="val">---</span></span>
         <span class="info-item">Pressure: <span id="val-pressure" class="val">---</span></span>
         <span class="info-item">Tilt X: <span id="val-tiltX" class="val">---</span></span>
         <span class="info-item">Tilt Y: <span id="val-tiltY" class="val">---</span></span>
