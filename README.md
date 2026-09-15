@@ -18,7 +18,7 @@ The test that has held so far: a feature earns its place if it makes something a
 ## Project layout
 A single-page static site — no build step, no dependencies.
 
-- `index.html` — toolbar (Clear, Mode and Stroke dropdowns, live readouts, About) and the fullscreen `<canvas>`; About dialog markup
+- `index.html` — toolbar in two rows (controls on top: Clear, Mode, Stroke, Export, About; pen readouts underneath) and the fullscreen `<canvas>`; About dialog markup
 - `app.js` — Pointer Events wiring, canvas sizing (HiDPI-aware: backing store in screen pixels, context scaled so drawing code stays in CSS pixels), drawing (stepped and tapered segments, oval stamps), curve fitting, info display, About-dialog handler
 - `style.css` — toolbar layout; `touch-action: none` and `overscroll-behavior: none` on the canvas to suppress browser pan/zoom/pull-to-refresh while drawing; About-dialog styling
 - `USERMANUAL.md` — end-user documentation (linked from the README and the in-app About dialog)

@@ -18,6 +18,10 @@ It is **not** a drawing app — there are no colors, brushes, layers, or save/ex
 
 ## Toolbar reference
 
+The toolbar has two rows: what you set on top, and what the pen reports underneath. The readouts
+change many times a second while you draw, so keeping them on their own row stops the controls
+moving under the pointer as values change width.
+
 | Control | What it shows / does |
 | --- | --- |
 | **Clear** | Wipes the canvas. |

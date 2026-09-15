@@ -7,39 +7,47 @@
 </head>
 <body oncontextmenu="return false;">
 
+<!-- Two rows: what you set on top, what the pen reports underneath. The readouts
+     change many times a second while drawing and the controls do not, so keeping
+     them apart stops the controls shifting under the pointer as values change
+     width, and gives the eye one place to look for live data. -->
 <div id="toolbar">
-    <button onclick="clearCanvas()">Clear</button>
-    <span class="info-item">Mode:
-        <select id="mode">
-            <option value="pressure-size">Pressure to Size</option>
-            <option value="azimuth-rotation">Tilt Azimuth to Brush rotation</option>
-            <option value="altitude-size">Tilt Altitude to Brush size</option>
-            <option value="twist-rotation">Twist to Brush rotation</option>
-            <option value="pointer-only">Pointer only (no drawing)</option>
+    <div class="toolbar-row" id="controls-row">
+        <button onclick="clearCanvas()">Clear</button>
+        <span class="control-item">Mode:
+            <select id="mode">
+                <option value="pressure-size">Pressure to Size</option>
+                <option value="azimuth-rotation">Tilt Azimuth to Brush rotation</option>
+                <option value="altitude-size">Tilt Altitude to Brush size</option>
+                <option value="twist-rotation">Twist to Brush rotation</option>
+                <option value="pointer-only">Pointer only (no drawing)</option>
+            </select>
+        </span>
+        <span class="control-item" id="stroke-item">Stroke:
+            <select id="stroke" title="How the ink between two pen samples is drawn. Pressure to Size only.">
+                <option value="stepped">Stepped width</option>
+                <option value="taper-straight" selected>Taper (straight)</option>
+                <option value="taper-curved">Taper (curved)</option>
+            </select>
+        </span>
+        <select id="export">
+            <option value="" disabled selected>Export…</option>
+            <option value="png">Save as PNG</option>
+            <option value="clipboard">Copy to clipboard</option>
         </select>
-    </span>
-    <span class="info-item" id="stroke-item">Stroke:
-        <select id="stroke" title="How the ink between two pen samples is drawn. Pressure to Size only.">
-            <option value="stepped">Stepped width</option>
-            <option value="taper-straight" selected>Taper (straight)</option>
-            <option value="taper-curved">Taper (curved)</option>
-        </select>
-    </span>
-    <span class="info-item">Type: <span id="val-type" class="val">---</span></span>
-    <span class="info-item">Pressure: <span id="val-pressure" class="val">---</span></span>
-    <span class="info-item">Tilt X: <span id="val-tiltX" class="val">---</span></span>
-    <span class="info-item">Tilt Y: <span id="val-tiltY" class="val">---</span></span>
-    <span class="info-item">Azimuth: <span id="val-azimuth" class="val">---</span></span>
-    <span class="info-item">Altitude: <span id="val-altitude" class="val">---</span></span>
-    <span class="info-item">Twist: <span id="val-twist" class="val">---</span></span>
-    <span class="info-item">Eraser: <span id="val-eraser" class="val">---</span></span>
-    <span class="info-item">Buttons: <span id="val-buttons" class="val">---</span></span>
-    <select id="export">
-        <option value="" disabled selected>Export…</option>
-        <option value="png">Save as PNG</option>
-        <option value="clipboard">Copy to clipboard</option>
-    </select>
-    <button id="about-btn" type="button">About</button>
+        <button id="about-btn" type="button">About</button>
+    </div>
+    <div class="toolbar-row" id="readout-row">
+        <span class="info-item">Type: <span id="val-type" class="val">---</span></span>
+        <span class="info-item">Pressure: <span id="val-pressure" class="val">---</span></span>
+        <span class="info-item">Tilt X: <span id="val-tiltX" class="val">---</span></span>
+        <span class="info-item">Tilt Y: <span id="val-tiltY" class="val">---</span></span>
+        <span class="info-item">Azimuth: <span id="val-azimuth" class="val">---</span></span>
+        <span class="info-item">Altitude: <span id="val-altitude" class="val">---</span></span>
+        <span class="info-item">Twist: <span id="val-twist" class="val">---</span></span>
+        <span class="info-item">Eraser: <span id="val-eraser" class="val">---</span></span>
+        <span class="info-item">Buttons: <span id="val-buttons" class="val">---</span></span>
+    </div>
 </div>
 
 <dialog id="about-dialog">

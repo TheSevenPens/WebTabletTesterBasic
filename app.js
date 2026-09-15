@@ -19,7 +19,6 @@ const canvas  = document.getElementById('canvas');
 const toolbar = document.getElementById('toolbar');
 const modeSelect = document.getElementById('mode');
 const strokeSelect = document.getElementById('stroke');
-const strokeItem = document.getElementById('stroke-item');
 const cursorIndicator = document.getElementById('cursor-indicator');
 const ctx = canvas.getContext('2d');
 
@@ -609,10 +608,10 @@ modeSelect.addEventListener('change', () => {
 // Pressure to Size draws that kind of ink: the oval modes stamp ellipses, which have
 // no line width to ramp and no path to fit. Disabled rather than hidden, so it does
 // not look live when it would do nothing.
+// Dimming the label alongside it is left to CSS, which styles the whole item from
+// the disabled select.
 function syncStrokeControl() {
-    const applies = modeSelect.value === 'pressure-size';
-    strokeSelect.disabled = !applies;
-    strokeItem.style.opacity = applies ? '' : '0.5';
+    strokeSelect.disabled = modeSelect.value !== 'pressure-size';
 }
 
 

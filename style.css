@@ -11,21 +11,60 @@ body {
 }
 
 #toolbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 6px 10px;
     background: #f0f0f0;
     border-bottom: 1px solid #ccc;
 }
 
+.toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 10px;
+    /* Wrap rather than overflow. Two dropdowns plus Export and About are wider than
+       a narrow window, and pushed off the edge they would be unreachable. */
+    flex-wrap: wrap;
+    row-gap: 6px;
+}
+
+/* The readouts are the pen talking, so they are set apart from the controls and
+   sit quieter. Wrapping rather than overflowing: on a narrow window the row
+   becomes two, which costs a little canvas and never hides a value. */
+#readout-row {
+    row-gap: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #e0e0e0;
+    background: #f7f7f7;
+}
+
+.control-item,
 .info-item {
     color: #555;
+    white-space: nowrap;
 }
 
 .val {
     font-family: "Consolas", "Courier New", monospace;
     color: #000;
+    /* These change many times a second while drawing. Fixed-width digits and a
+       floor on the width keep the row from twitching as the numbers change. */
+    font-variant-numeric: tabular-nums;
+    display: inline-block;
+    min-width: 5ch;
+}
+
+#val-type,
+#val-eraser {
+    min-width: 4ch;
+}
+
+#val-buttons {
+    min-width: 8ch;
+}
+
+/* A control that does not apply to the current mode. Dimmed here rather than in
+   script, so the reason lives with the rest of the appearance. */
+.control-item:has(select:disabled) {
+    opacity: 0.5;
 }
 
 #export {
