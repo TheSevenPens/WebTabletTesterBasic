@@ -34,6 +34,7 @@ moving under the pointer as values change width.
 | **Stroke** | How the ink between two pen samples is drawn — see [Stroke rendering](#stroke-rendering). Only **Pressure to Size** draws that kind of ink, so the control is disabled in the other modes. |
 | **Type** | `pen`, `mouse`, or `touch` — what the browser thinks the input device is. |
 | **X, Y** | Where the pointer is, in CSS pixels, relative to the window. Always to two decimals — see [Position precision](#position-precision). |
+| **Precision** | Which grid those positions land on: `CSS pixels`, `screen pixels`, or `sub-pixel` — see [Position precision](#position-precision). |
 | **Pressure** | 0.000 – 1.000. Mouse always reports `0.5`. |
 | **Tilt X** | -90° to 90°. Left/right tilt of the pen. |
 | **Tilt Y** | -90° to 90°. Forward/back tilt of the pen. |
@@ -144,24 +145,32 @@ being given; they were simply going unopened.
 
 ## Position precision
 
-A mouse reports whole pixels. A pen does not have to: pointer positions are decimal numbers in the
-specification, and a tablet measures far more finely than a screen can show. Whether you get that
-precision depends on your browser and driver, so the two decimals are always displayed.
+**X, Y** shows where the pointer is to two decimals. **Precision** says something the decimals
+cannot: which grid those positions are sitting on.
 
-- **`.00` every time you move** — you are getting whole pixels and nothing finer.
-- **Anything else** — your pen is being reported between pixels, which is more precise than the
-  screen can draw and more precise than a mouse can be.
+| | |
+|---|---|
+| **CSS pixels** | whole numbers as reported. The coarsest of the three — under display scaling one CSS pixel spans more than one screen pixel. A mouse normally reads this. |
+| **screen pixels** | your display's own grid. Under scaling these arrive as decimals — `262.857` at 175% — and look like fine measurement while being nothing of the kind. |
+| **sub-pixel** | positions between screen pixels, finer than your display can draw. |
 
-This is not the same thing as your tablet's own resolution. A drawing tablet measures in its own
-units — often thousands per inch, far more than the pixels across your screen — and no web page can
-ask for those. What a page can have is fractions of a pixel, which on a high-density display is
-already finer than anything you can see.
+**The decimals are a trap, which is why this readout exists.** At 175% scaling a whole screen pixel
+is 0.571 CSS pixels, so a position quantised to the screen's grid arrives looking like `1043.428`.
+Two decimal places of apparent precision, and not one of them earned. Multiply by your scaling
+factor and the whole number underneath appears.
 
-**Why the number is measured from the window and not from the canvas.** A canvas's left edge often
-sits on a fraction of a pixel. Subtracting it would make the position fractional even when the pen
-reported a whole number, and this readout would then be answering a question about the page layout
-while appearing to answer one about your hardware. Strokes are still drawn from the canvas-relative
-position; it carries exactly the same precision.
+**This is a ceiling on what any web page can draw.** A drawing tablet measures in its own units,
+often thousands per inch: a 24-inch display tablet is around 100,000 units across, against 2,560
+screen pixels. Wintab hands a desktop application the tablet's own grid. A browser gets pixels.
+There is no web API that does better — [Wacom's own web
+demo](https://github.com/Wacom-Developer/wacom-device-kit-web) uses the same Pointer Events as
+everything else.
+
+Measured on Windows with a Wacom tablet at 175% scaling, this reads **screen pixels**: 359
+consecutive samples, every one within 0.0001 of a whole screen pixel. That quantisation is what
+makes slow strokes look rough — see [Why slow strokes look
+rough](#why-slow-strokes-look-rough) — and **Smoothing** is what reconstructs a path between the
+grid points.
 
 ## Taking pressure out of the picture
 

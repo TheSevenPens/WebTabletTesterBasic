@@ -44,6 +44,7 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - **Twist to Brush rotation**: rotating the pen barrel rotates the oval (only relevant on hardware that reports twist)
 - **Pointer only (no drawing)**: a red crosshair follows the pointer; no strokes are drawn. Crosshair stays visible while pressing. Crosshair hides on pointerleave and when switching to another mode.
 - Readouts (tiltX/Y, azimuth, altitude, twist) update live regardless of mode
+- **Precision**: reads `CSS pixels` for a mouse on a scaled display, `screen pixels` for a pen whose positions sit on the display grid, and `sub-pixel` for anything finer. The worst reading in the window decides, since being on a grid means every position is on it
 - **X, Y**: tracks the pointer and reads `.00` for a mouse. It comes from `clientX/clientY`, not `offsetX/offsetY`: an offset subtracts the canvas's own left edge, which is usually fractional, so offsets read fractional even for a device reporting whole pixels
 - **Points/s**: both numbers appear while a real pointer is moving and return to `---` within about half a second of it stopping; both read `n/a` in a browser without `getCoalescedEvents()`. With a mouse the two are equal, since nothing is being merged. **A tablet is the only way to check that they can differ** — events dispatched from script contribute nothing, an untrusted event having an empty coalesced list
 - Delete / Backspace clears the canvas; the Clear button clears the canvas

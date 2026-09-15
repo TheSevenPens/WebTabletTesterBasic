@@ -121,6 +121,7 @@ const infoEls = {
     twist:    document.getElementById('val-twist'),
     eraser:   document.getElementById('val-eraser'),
     buttons:  document.getElementById('val-buttons'),
+    precision: document.getElementById('val-precision'),
     penRate:  document.getElementById('val-pen-rate'),
     usedRate: document.getElementById('val-used-rate'),
 };
@@ -651,6 +652,8 @@ function updateInfo(e) {
     infoEls.type.textContent     = e.pointerType || '---';
     infoEls.x.textContent        = position(e.clientX);
     infoEls.y.textContent        = position(e.clientY);
+    notePosition(e);
+    infoEls.precision.textContent = precision();
     infoEls.pressure.textContent = e.pressure.toFixed(3);
     infoEls.tiltX.textContent    = e.tiltX.toFixed(1) + '°';
     infoEls.tiltY.textContent    = e.tiltY.toFixed(1) + '°';
@@ -683,6 +686,80 @@ function updateInfo(e) {
 // The display only. Nothing here rounds the value the stroke is drawn from.
 function position(value) {
     return typeof value === 'number' && isFinite(value) ? value.toFixed(2) : '---';
+}
+
+
+// ── Position precision ────────────────────────────────────────
+
+// Which grid, if any, the incoming positions are snapped to.
+//
+// Three answers, coarsest first:
+//
+//   CSS pixels     whole numbers as reported. Under display scaling one of these
+//                  spans more than one screen pixel, so this is the *least* precise
+//                  of the three even though it looks like the tidiest. A mouse.
+//   screen pixels  the display's own grid. Under scaling these arrive as fractions
+//                  -- 262.857 at 175% -- and look like sub-pixel measurement while
+//                  being nothing of the kind.
+//   sub-pixel      positions between screen pixels. Finer than the display.
+//
+// The decimals in the X, Y readout cannot tell these apart, which is the whole
+// reason this exists. Multiplying back by the scale factor can.
+//
+// It matters because it is a ceiling. A tablet measures in its own units, thousands
+// per inch; if the browser is handing over whole pixels of either sort then
+// everything finer was discarded before any page could see it, and no amount of
+// drawing cleverness gets it back.
+const PRECISION_WINDOW = 40;
+
+// Enough readings that one stationary sample cannot decide it.
+const PRECISION_MINIMUM = 8;
+
+// How near a whole pixel counts as landing on it. Generous next to the error of
+// multiplying a double by the scale factor, and far tighter than any real
+// sub-pixel reporting would be.
+const ON_GRID = 0.01;
+
+let cssOffsets = [];
+let screenOffsets = [];
+let positionSeenAt = 0;
+
+function notePosition(e) {
+    if (!isFinite(e.clientX) || !isFinite(e.clientY)) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const offGrid = value => Math.abs(value - Math.round(value));
+
+    cssOffsets.push(Math.max(offGrid(e.clientX), offGrid(e.clientY)));
+    screenOffsets.push(Math.max(offGrid(e.clientX * dpr), offGrid(e.clientY * dpr)));
+
+    if (cssOffsets.length > PRECISION_WINDOW) {
+        cssOffsets.shift();
+        screenOffsets.shift();
+    }
+
+    positionSeenAt = performance.now();
+}
+
+// The worst reading decides, not the typical one: on a grid means every position is
+// on it, so a single one that is not settles the question.
+function onGrid(offsets) {
+    return Math.max(...offsets) < ON_GRID;
+}
+
+function precision() {
+    if (cssOffsets.length < PRECISION_MINIMUM) return '---';
+    if (performance.now() - positionSeenAt > RATE_IDLE_MS) return '---';
+
+    // Coarsest first. Under display scaling a CSS pixel spans more than one screen
+    // pixel, so positions on the CSS grid are the least precise of the three even
+    // though they are the ones that look like whole numbers.
+    const scaled = (window.devicePixelRatio || 1) !== 1;
+
+    if (onGrid(cssOffsets)) return scaled ? 'CSS pixels' : 'whole pixels';
+    if (onGrid(screenOffsets)) return 'screen pixels';
+
+    return 'sub-pixel';
 }
 
 
@@ -774,6 +851,7 @@ function showRates() {
 // keep claiming whatever was last measured after the pen was lifted.
 setInterval(() => {
     if (infoEls.penRate.textContent !== '---') showRates();
+    if (infoEls.precision.textContent !== '---') infoEls.precision.textContent = precision();
 }, 200);
 
 

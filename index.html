@@ -65,6 +65,10 @@
         <span class="info-item" title="Pointer position in CSS pixels, relative to the window. Shown to two decimals: anything other than .00 means this browser is reporting between pixels, which is finer than the screen can draw.">X, Y:
             <span id="val-x" class="val">---</span>,
             <span id="val-y" class="val">---</span></span>
+        <!-- Whether those positions sit on the screen's own pixel grid. Display
+             scaling turns whole screen pixels into fractional CSS ones, so the
+             decimals above cannot answer this and this can. -->
+        <span class="info-item" title="Which grid the positions land on. &quot;CSS pixels&quot; is the coarsest and is what a mouse reports. &quot;screen pixels&quot; means your display&#39;s own grid, which under display scaling arrives as decimals and looks finer than it is. &quot;sub-pixel&quot; means finer than the display.">Precision: <span id="val-precision" class="val">---</span></span>
         <span class="info-item">Pressure: <span id="val-pressure" class="val">---</span></span>
         <span class="info-item">Tilt X: <span id="val-tiltX" class="val">---</span></span>
         <span class="info-item">Tilt Y: <span id="val-tiltY" class="val">---</span></span>

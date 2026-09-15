@@ -69,6 +69,12 @@ body {
     text-align: right;
 }
 
+/* Words, not a number: left aligned and wide enough for the longer of them. */
+#val-precision {
+    min-width: 11ch;
+    text-align: left;
+}
+
 #val-x,
 #val-y {
     min-width: 7ch;
