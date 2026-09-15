@@ -33,7 +33,8 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - **Stroke: Stepped width**: the edge of a stroke shows a visible staircase where pressure changes
 - **Stroke: Taper (straight)**: width ramps smoothly, and a quickly drawn arc shows corners where the chords meet
 - **Stroke: Taper (curved)**: the same stroke drawn again has no corners. The ink lags the pen by one sample, and the final segment appears when the pen lifts — a stroke must not end short of where the pen was raised
-- **Stroke**, **Edge**, **Fixed pressure** and **Use all pen points** are disabled and dimmed in every mode except Pressure to Size
+- **Stroke**, **Edge**, **Smoothing**, **Fixed pressure** and **Use all pen points** are disabled and dimmed in every mode except Pressure to Size
+- **Smoothing**: Light and Heavy visibly straighten a slow stroke and make the ink trail the pen; Off restores both the roughness and the responsiveness
 - **Edge: Soft**: the stroke's boundary is feathered, both while it is being drawn and after the pen lifts — a stroke must not change appearance at the moment it is committed
 - Clear, window resize, the oval modes and Export all still work now that the visible canvas is composited rather than drawn into directly
 - **Fixed pressure**: stroke width stops responding to the pen while the Pressure readout keeps reporting it

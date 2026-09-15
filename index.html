@@ -36,6 +36,13 @@
                 <option value="soft">Soft</option>
             </select>
         </span>
+        <span class="control-item" id="smoothing-item">Smoothing:
+            <select id="smoothing" title="Filters the positions before they are drawn, the way every web drawing library does by default. Off shows what the pen reported. Light matches perfect-freehand's default, Heavy matches atrament's. Smoothing trades accuracy for calm: the ink follows a little behind the pen.">
+                <option value="off" selected>Off</option>
+                <option value="light">Light</option>
+                <option value="heavy">Heavy</option>
+            </select>
+        </span>
         <label class="control-item" id="fixedpressure-item"
                title="Draw as though the pen were pressed at a constant half pressure. The Pressure readout still shows what the pen actually reports; only the stroke ignores it. Use this to see what a stroke looks like with pressure taken out of the picture.">
             <input type="checkbox" id="fixedpressure"> Fixed pressure

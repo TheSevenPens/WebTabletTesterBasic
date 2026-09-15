@@ -27,6 +27,7 @@ moving under the pointer as values change width.
 | **Clear** | Wipes the canvas. |
 | **Export…** | Save the current canvas as a PNG file, or copy it to the clipboard as an image (paste into chat, an image editor, etc.). The image is captured at your display's full pixel resolution, so stroke detail survives zooming in. Useful for sharing what your pen is producing when reporting a driver issue. |
 | **Mode** | Picks which pen input drives the brush — see below. |
+| **Smoothing** | Filters the positions before they are drawn, as every web drawing library does by default — see [Why slow strokes look rough](#why-slow-strokes-look-rough). Pressure to Size only. |
 | **Edge** | Whether the boundary of a stroke is crisp or feathered — see [Why slow strokes look rough](#why-slow-strokes-look-rough). Pressure to Size only. |
 | **Fixed pressure** | Draw as though the pen were held at a constant half pressure. The Pressure readout still shows what the pen reports; only the stroke ignores it. Pressure to Size only. |
 | **Use all pen points** | Draw from every position the pen reported, instead of the one per screen refresh a browser hands over on its own — see [Report rate](#report-rate). Pressure to Size only, and only where the browser can supply them. |
@@ -182,38 +183,62 @@ changed.
 
 ## Why slow strokes look rough
 
-Draw slowly and the edge of a stroke wobbles. Draw quickly and it comes out clean. This surprises
-people, because slow and careful ought to be the neat one.
+Draw slowly and the edge of a stroke wobbles. Draw quickly and it comes out clean. The cause is not
+your hand, and it is not this app adding anything.
 
-**The cause is in the path, not the pressure.** Tick **Fixed pressure**, which holds the width
-constant, and a slow stroke is still rough — so nothing about pressure is responsible. What is left
-is position: your hand and your pen together report a path that wanders by around a pixel, and drawn
-slowly that wander is packed into a short distance where it is easy to see. The same wander spread
-along a fast stroke disappears into the length of it.
+**Your pen's positions are snapped to whole screen pixels before the page ever sees them.** Measured
+on Windows with a Wacom tablet: 359 consecutive samples, every one of them landing within 0.0001 of
+a whole physical pixel.
 
-**Every one of those pixels is real.** The tester is not adding them. This is what your pen reported
-and what a drawing application receives.
+That quantisation is invisible at speed and obvious when slow, and the reason is the size of a step
+compared to the size of the grid:
 
-**So why does the same stroke look better in a painting application?** Largely because of the
-**Edge** setting. Most brushes have a soft, feathered rim rather than a crisp boundary, and a
-feather about a pixel wide is enough to swallow a wobble about a pixel wide. Switch **Edge** to
-**Soft** and draw the same slow stroke: the wander is still there, but there is no longer a hard
-line for it to show up on.
+- **Slow** — samples land one or two pixels apart, so snapping each one to the grid moves it by a
+  large fraction of the gap between it and the next. The direction from one sample to the next
+  lurches, and a crisp edge shows every lurch.
+- **Fast** — samples land twenty or thirty pixels apart, and the same snapping is a rounding error
+  of a fraction of a degree.
 
-That is worth understanding rather than simply preferring. A hard edge is the honest setting and the
-reason this tool defaults to it — it shows you what your hardware actually did. A soft edge shows
-you what a painting application chooses to show you instead. Neither is wrong; they answer different
-questions.
+**Display scaling hides this.** At 175% scaling a whole screen pixel is 0.571 CSS pixels, so the
+positions arrive as `262.857`, `1043.428` — decimals that look like sub-pixel precision and are
+nothing of the kind. To check your own machine, multiply **X** by your scaling factor: if the result
+is always a whole number, your positions are on the grid.
 
-**Other things that change how visible it is,** none of which is the cause:
+**This is a ceiling, not a bug in the app.** A drawing tablet measures in its own units, often
+thousands per inch. Wintab hands a desktop application the tablet's own grid; a browser gets whole
+screen pixels. There is no web API that does better — [Wacom's own web
+demo](https://github.com/Wacom-Developer/wacom-device-kit-web) uses the same Pointer Events
+everything else does.
 
-- **Brush size.** Width is pressure times the maximum brush size, so a wide brush magnifies any
-  width variation. It scales the effect and does not create it.
-- **Stroke rendering.** Stepped, straight and curved all trace the same wandering path. The curve
-  fitter smooths the *route between* samples, not the samples themselves.
-- **Smoothing.** This tool has none. Painting applications filter the incoming path — Krita's
-  stabiliser, Clip Studio's stabilisation, Photoshop's smoothing — and that filtering is the other
-  half of why their strokes look calmer than the raw signal.
+**Smoothing is the answer to it**, and not for the reason smoothing usually exists. It is not hiding
+a shaky hand; it is reconstructing a path between grid points. Measured against a true straight
+line, on a snapped diagonal:
+
+| Off | Light | Heavy |
+|---|---|---|
+| 0.141 px from the line | 0.082 px | 0.028 px |
+
+**Off** is the raw signal, which is what a testing tool should show by default and what almost
+nothing else on the web shows you. **Light** matches the default of
+[perfect-freehand](https://github.com/steveruizok/perfect-freehand), the library behind tldraw and
+Excalidraw. **Heavy** matches [atrament](https://github.com/jakubfiala/atrament). Every drawing
+library in this space filters by default, which is why strokes elsewhere look calmer than yours: you
+have been comparing a raw signal against filtered ones.
+
+The cost is honest: the filter is a running average, so the ink follows a little behind the pen, and
+it is counted in samples rather than in distance — which means it filters a fast stroke over a
+longer distance than a slow one. Krita's stabiliser weights by distance travelled instead and is the
+better instrument; this is the one the web actually ships.
+
+**Two things that change how visible the roughness is, neither of which is the cause:**
+
+- **Edge.** A feathered rim has no crisp boundary for the lurching to land on, which is most of why
+  a painting application's brush looks kinder than this one's.
+- **Brush size.** Width is pressure times the maximum size, so a wide brush magnifies everything.
+
+**And two things that are not involved at all,** both ruled out by experiment: pressure — hold it
+constant with **Fixed pressure** and a slow stroke is still rough — and the choice of **Stroke**
+rendering, since stepped, straight and curved all trace the same snapped path.
 
 ## OS & browser compatibility
 

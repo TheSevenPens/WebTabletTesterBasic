@@ -22,6 +22,7 @@ const strokeSelect = document.getElementById('stroke');
 const allPointsCheck = document.getElementById('allpoints');
 const fixedPressureCheck = document.getElementById('fixedpressure');
 const edgeSelect = document.getElementById('edge');
+const smoothingSelect = document.getElementById('smoothing');
 
 /// Pressure to draw at when the pen's own is being ignored. Half, so the brush is
 /// mid-width and a stroke has room to look thicker or thinner than it.
@@ -373,6 +374,51 @@ function brushForMode(mode, e) {
         default:
             return { rx: OVAL_RADIUS_X, ry: OVAL_RADIUS_Y, rot: 0 };
     }
+}
+
+
+// ── Smoothing ─────────────────────────────────────────────────
+
+// Streamlining, as every web drawing library does it: each incoming position is
+// replaced by a step from the last filtered position toward it. perfect-freehand
+// calls the amount `streamline` and defaults it to 0.5; atrament calls its
+// equivalent `smoothing` and defaults it to 0.85. Those two are the settings here,
+// so a stroke can be compared against what the rest of the web would have drawn.
+//
+// It is an exponential moving average, and it is worth being plain about the
+// consequence: the window is counted in samples, not in distance, so it filters a
+// fast stroke over a longer distance than a slow one. Krita's stabiliser weights by
+// distance travelled instead and is the better instrument. This is here because it
+// is what the ecosystem actually ships, and the point of the control is the
+// comparison.
+//
+// Position only. Pressure has its own noise and would want its own setting, which is
+// what atrament does with `pressureSmoothing`.
+const STREAMLINE = { off: 0, light: 0.5, heavy: 0.85 };
+
+let streamlined = null;
+
+function resetSmoothing() {
+    streamlined = null;
+}
+
+function smooth(sample) {
+    const strength = STREAMLINE[smoothingSelect.value] ?? 0;
+
+    // The first sample of a stroke has nothing to be filtered toward, and starting
+    // from anywhere else would drag the stroke out of the point it began at.
+    if (strength <= 0 || streamlined === null) {
+        streamlined = { x: sample.x, y: sample.y };
+        return sample;
+    }
+
+    const step = 1 - strength;
+    streamlined = {
+        x: streamlined.x + (sample.x - streamlined.x) * step,
+        y: streamlined.y + (sample.y - streamlined.y) * step,
+    };
+
+    return { ...sample, x: streamlined.x, y: streamlined.y };
 }
 
 
@@ -780,6 +826,7 @@ function endStroke() {
     lastPos = null;
     lastDrawn = null;
     fitter.reset();
+    resetSmoothing();
 }
 
 
@@ -790,7 +837,8 @@ canvas.addEventListener('pointerdown', (e) => {
     lastPos = sampleFrom(e);
     lastDrawn = null;
     fitter.reset();
-    for (const point of fitter.next(sampleFrom(e), isCurved())) drawTo(point);
+    resetSmoothing();
+    for (const point of fitter.next(smooth(sampleFrom(e)), isCurved())) drawTo(point);
     updateInfo(e);
 });
 
@@ -823,7 +871,7 @@ canvas.addEventListener('pointermove', (e) => {
         // Pressure (0–1) scales the brush size, and the Stroke control decides how
         // the ink between two samples is laid down.
         for (const sample of burst ? [...burst].map(sampleFrom) : [pos]) {
-            for (const point of fitter.next(sample, isCurved())) drawTo(point);
+            for (const point of fitter.next(smooth(sample), isCurved())) drawTo(point);
         }
     } else {
         drawOvalStroke(lastPos, pos, brushForMode(mode, e));
@@ -877,6 +925,7 @@ function syncStrokeControl() {
     // The oval modes stamp into the picture directly and have no live layer to
     // feather, so there is nothing for this to change there.
     edgeSelect.disabled = !drawsStrokes;
+    smoothingSelect.disabled = !drawsStrokes;
 }
 
 function usingAllPoints() {
