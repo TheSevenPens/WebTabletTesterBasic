@@ -65,6 +65,13 @@ body {
     min-width: 5ch;
 }
 
+/* "-1920.0": a captured pointer dragged off the canvas can go negative, and a
+   wide canvas runs to four digits */
+#val-x,
+#val-y {
+    min-width: 7ch;
+}
+
 /* "-60.0°", "360.0°", "359.0°" */
 #val-tiltX,
 #val-tiltY,

@@ -28,6 +28,7 @@ moving under the pointer as values change width.
 | **Export…** | Save the current canvas as a PNG file, or copy it to the clipboard as an image (paste into chat, an image editor, etc.). The image is captured at your display's full pixel resolution, so stroke detail survives zooming in. Useful for sharing what your pen is producing when reporting a driver issue. |
 | **Mode** | Picks which pen input drives the brush — see below. |
 | **Type** | `pen`, `mouse`, or `touch` — what the browser thinks the input device is. |
+| **X / Y** | Pen position on the canvas in CSS pixels, measured from its top-left corner. Pens usually report fractions of a pixel; a mouse reports whole numbers. |
 | **Pressure** | 0.000 – 1.000. A mouse reports `0.5` while a button is held and `0` otherwise. |
 | **Tilt X** | -90° to 90°. Left/right tilt of the pen. |
 | **Tilt Y** | -90° to 90°. Forward/back tilt of the pen. |
