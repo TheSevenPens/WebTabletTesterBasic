@@ -42,7 +42,7 @@ There are no automated tests. Run each in the relevant **Mode** before pushing c
 - **Tilt Altitude to Brush size**: upright pen produces a small circle; tilting the pen toward flat stretches the oval in the leaning direction
 - **Twist to Brush rotation**: rotating the pen barrel rotates the oval (only relevant on hardware that reports twist)
 - **Pointer only (no drawing)**: a red crosshair follows the pointer; no strokes are drawn. Crosshair stays visible while pressing. Crosshair hides on pointerleave and when switching to another mode.
-- Readouts (tiltX/Y, azimuth, altitude, twist) update live regardless of mode
+- Readouts (X/Y, tiltX/Y, azimuth, altitude, twist) update live regardless of mode
 - A tap — press and release without moving — leaves a mark in all four drawing modes
 - A stroke reaches the position the pen was lifted from, not one reading short of it
 - Pressing a pen's barrel button in mid-air draws nothing, and lifting the tip while holding it ends the stroke

@@ -23,6 +23,8 @@ const ctx = canvas.getContext('2d');
 
 const infoEls = {
     type:     document.getElementById('val-type'),
+    x:        document.getElementById('val-x'),
+    y:        document.getElementById('val-y'),
     pressure: document.getElementById('val-pressure'),
     tiltX:    document.getElementById('val-tiltX'),
     tiltY:    document.getElementById('val-tiltY'),
@@ -699,6 +701,11 @@ function radians(degrees) {
 function updateInfo(e) {
     const toDeg = radians => (radians * 180 / Math.PI).toFixed(1);
     infoEls.type.textContent     = e.pointerType || '---';
+    // Canvas-relative CSS pixels, the same coordinates the drawing uses. A pen
+    // reports fractions of a pixel, so one decimal shows that precision.
+    const coord = v => isFinite(v) ? v.toFixed(1) : '---';
+    infoEls.x.textContent        = coord(e.offsetX);
+    infoEls.y.textContent        = coord(e.offsetY);
     infoEls.pressure.textContent = e.pressure.toFixed(3);
     infoEls.tiltX.textContent    = e.tiltX.toFixed(1) + '°';
     infoEls.tiltY.textContent    = e.tiltY.toFixed(1) + '°';
