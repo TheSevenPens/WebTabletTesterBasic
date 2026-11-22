@@ -28,7 +28,7 @@ moving under the pointer as values change width.
 | **Export…** | Save the current canvas as a PNG file, or copy it to the clipboard as an image (paste into chat, an image editor, etc.). The image is captured at your display's full pixel resolution, so stroke detail survives zooming in. Useful for sharing what your pen is producing when reporting a driver issue. |
 | **Mode** | Picks which pen input drives the brush — see below. |
 | **Type** | `pen`, `mouse`, or `touch` — what the browser thinks the input device is. |
-| **X / Y** | Pen position on the canvas in CSS pixels, measured from its top-left corner. Pens usually report fractions of a pixel; a mouse reports whole numbers. |
+| **X / Y** | Pen position on the canvas in CSS pixels, measured from its top-left corner. The digit after the decimal point does **not** show how precise your pen is — see [Known quirks](#known-quirks). |
 | **Pressure** | 0.000 – 1.000. A mouse reports `0.5` while a button is held and `0` otherwise. |
 | **Tilt X** | -90° to 90°. Left/right tilt of the pen. |
 | **Tilt Y** | -90° to 90°. Forward/back tilt of the pen. |
@@ -107,6 +107,12 @@ tablet.
 - **Eraser detection is driver-dependent** — Pens with a physical eraser end (e.g. many Wacom pens) will set the eraser bit on Windows Chrome/Edge/Firefox with Windows Ink enabled. Apple Pencil has no eraser end. Some pens/drivers map the eraser to a normal tip contact plus a configurable button, so the **Eraser** readout stays `no` even when the eraser is touching the tablet.
 - **A second touch while drawing** — resting a palm on a display tablet, or a second finger, does not join or end the stroke in progress. The stroke belongs to the pointer that started it, and so do the readouts until it ends.
 - **Mouse / touch values** — A mouse reports pressure `0.5` while a button is held and `0` otherwise, with zero tilt and twist and an altitude of 90°. Touch typically reports no pressure or tilt either. These are not bugs in the tester — they reflect what the browser delivers.
+- **The X / Y decimal is not pen precision.** Your tablet measures the pen far more finely than a screen pixel, but Chrome and Edge on Windows round each position to a whole physical screen pixel before the page sees it. The decimal you see comes only from converting those whole screen pixels into CSS pixels, which depends on your Windows display scaling multiplied by the browser zoom. At 100% scaling and 100% zoom, X and Y always end in `.0`. At a combined 200% (for example 200% scaling and 100% zoom, or the other way round) they end in `.0` or `.5`; at a combined 300%, in `.0`, `.3` or `.7`. So:
+  - A readout that always ends in `.0` does not mean your tablet is low-resolution or faulty.
+  - More varied decimals at a higher zoom or scaling do not mean the pen became more precise — the screen pixels just got smaller relative to the page.
+  - Two tablets cannot be compared by their decimals. Every tablet shows the same pattern at the same settings.
+
+  Other browsers and operating systems have not been checked and may behave differently.
 - **Zero is a reading, not an absence.** A tilt or twist of `0` can mean the pen is upright and untwisted just as easily as it can mean the property is unsupported. Move the pen and watch whether the number changes; that is what distinguishes the two.
 - **Azimuth and altitude on older browsers** — Safari only added these in **18.2**. Where they are missing the tester works them out from Tilt X and Tilt Y, which every implementation reports, so the two tilt modes keep working and the numbers stay meaningful.
 
